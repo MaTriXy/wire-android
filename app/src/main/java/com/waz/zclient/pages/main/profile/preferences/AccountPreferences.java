@@ -23,8 +23,9 @@ import android.content.DialogInterface;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.support.v7.preference.Preference;
-import android.support.v7.preference.PreferenceCategory;
 import android.text.TextUtils;
+import android.view.View;
+import android.widget.EditText;
 import com.waz.api.InitListener;
 import com.waz.api.Self;
 import com.waz.zclient.R;
@@ -32,22 +33,22 @@ import com.waz.zclient.controllers.accentcolor.AccentColorObserver;
 import com.waz.zclient.controllers.tracking.events.profile.ResetPassword;
 import com.waz.zclient.controllers.tracking.events.profile.SignOut;
 import com.waz.zclient.core.controllers.tracking.events.session.LoggedOutEvent;
-import com.waz.zclient.core.controllers.tracking.events.settings.ChangedThemeEvent;
-import com.waz.zclient.core.controllers.tracking.events.Event;
+import com.waz.zclient.core.controllers.tracking.events.settings.EditedUsernameEvent;
 import com.waz.zclient.core.stores.profile.ProfileStoreObserver;
 import com.waz.zclient.pages.BasePreferenceFragment;
+import com.waz.zclient.pages.main.profile.ZetaPreferencesActivity;
 import com.waz.zclient.pages.main.profile.camera.CameraContext;
 import com.waz.zclient.pages.main.profile.preferences.dialogs.AccentColorPreferenceDialogFragment;
 import com.waz.zclient.pages.main.profile.preferences.dialogs.AddEmailAndPasswordPreferenceDialogFragment;
 import com.waz.zclient.pages.main.profile.preferences.dialogs.AddPhoneNumberPreferenceDialogFragment;
 import com.waz.zclient.pages.main.profile.preferences.dialogs.ChangeEmailPreferenceDialogFragment;
+import com.waz.zclient.pages.main.profile.preferences.dialogs.ChangeUsernamePreferenceDialogFragment;
 import com.waz.zclient.pages.main.profile.preferences.dialogs.VerifyEmailPreferenceFragment;
 import com.waz.zclient.pages.main.profile.preferences.dialogs.VerifyPhoneNumberPreferenceFragment;
 import com.waz.zclient.ui.utils.TextViewUtils;
-import com.waz.zclient.utils.LayoutSpec;
+import com.waz.zclient.utils.StringUtils;
 import com.waz.zclient.utils.ViewUtils;
 import net.xpece.android.support.preference.EditTextPreference;
-import net.xpece.android.support.preference.SwitchPreference;
 
 public class AccountPreferences extends BasePreferenceFragment<AccountPreferences.Container> implements ProfileStoreObserver,
                                                                                                         SharedPreferences.OnSharedPreferenceChangeListener,
@@ -56,10 +57,12 @@ public class AccountPreferences extends BasePreferenceFragment<AccountPreference
                                                                                                         AddEmailAndPasswordPreferenceDialogFragment.Container,
                                                                                                         ChangeEmailPreferenceDialogFragment.Container,
                                                                                                         AddPhoneNumberPreferenceDialogFragment.Container,
+                                                                                                        ChangeUsernamePreferenceDialogFragment.Container,
                                                                                                         AccentColorObserver {
 
     public static final String TAG = AccountPreferences.class.getName();
     private EditTextPreference namePreference;
+    private Preference usernamePreference;
     private Preference phonePreference;
     private Preference emailPreference;
     private Preference signOutPreference;
@@ -67,7 +70,6 @@ public class AccountPreferences extends BasePreferenceFragment<AccountPreference
     private Preference resetPasswordPreference;
     private PicturePreference picturePreference;
     private ColorPreference colorPreference;
-    private SwitchPreference themePreference;
 
     public static AccountPreferences newInstance(String rootKey, Bundle extras) {
         AccountPreferences f = new AccountPreferences();
@@ -81,16 +83,53 @@ public class AccountPreferences extends BasePreferenceFragment<AccountPreference
     public void onCreatePreferences2(Bundle savedInstanceState, String rootKey) {
         super.onCreatePreferences2(savedInstanceState, rootKey);
         addPreferencesFromResource(R.xml.preferences_account);
+        boolean shouldShowUsernameEdit = getArguments().getBoolean(ZetaPreferencesActivity.SHOW_USERNAME_EDIT);
         namePreference = (EditTextPreference) findPreference(getString(R.string.pref_account_name_key));
+        namePreference.setOnEditTextCreatedListener(new EditTextPreference.OnEditTextCreatedListener() {
+            @Override
+            public void onEditTextCreated(final EditText edit) {
+                //Having it directly on the xml doesn't seem to work for EditTextPreference
+                edit.setSingleLine(true);
+
+                edit.setOnFocusChangeListener(new View.OnFocusChangeListener() {
+                    @Override
+                    public void onFocusChange(View view, boolean b) {
+                        edit.setSelection(edit.getText().length());
+                    }
+                });
+            }
+        });
+
         namePreference.setOnPreferenceChangeListener(new Preference.OnPreferenceChangeListener() {
             @Override
             public boolean onPreferenceChange(Preference preference, Object newValue) {
-                final String newName = (String) newValue;
-                if (TextUtils.isEmpty(newName)) {
+                final String newName = ((String) newValue).trim();
+                if (TextUtils.getTrimmedLength(newName) < getResources().getInteger(R.integer.account_preferences__min_name_length)) {
+                    ViewUtils.showAlertDialog(getActivity(),
+                        null,
+                        getString(R.string.pref_account_edit_name_empty_warning),
+                        getString(R.string.pref_account_edit_name_empty_verify),
+                        new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                dialog.dismiss();
+                            }
+                        },
+                        false);
+
                     return false;
                 }
-                getStoreFactory().getProfileStore().setMyName(newName.trim());
+                getStoreFactory().getProfileStore().setMyName(newName);
                 return false;
+            }
+        });
+        usernamePreference = findPreference(getString(R.string.pref_account_username_key));
+        usernamePreference.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
+            @Override
+            public boolean onPreferenceClick(Preference preference) {
+                String username = getStoreFactory().getProfileStore().getSelfUser().getUsername();
+                changeUsername(username, true);
+                return true;
             }
         });
         phonePreference = findPreference(getString(R.string.pref_account_phone_key));
@@ -98,7 +137,7 @@ public class AccountPreferences extends BasePreferenceFragment<AccountPreference
             @Override
             public boolean onPreferenceClick(Preference preference) {
                 final CharSequence phoneNumber = preference.getTitle();
-                if (TextUtils.isEmpty(phoneNumber)) {
+                if (TextUtils.isEmpty(phoneNumber) || phoneNumber.equals(getString(R.string.pref_account_add_phone_title))) {
                     addPhoneNumber();
                 } else {
                     changePhoneNumber(String.valueOf(phoneNumber));
@@ -111,7 +150,7 @@ public class AccountPreferences extends BasePreferenceFragment<AccountPreference
             @Override
             public boolean onPreferenceClick(Preference preference) {
                 final CharSequence email = preference.getTitle();
-                if (TextUtils.isEmpty(email)) {
+                if (TextUtils.isEmpty(email) || email.equals(getString(R.string.pref_account_add_email_title))) {
                     addEmailAndPassword();
                 } else {
                     changeEmail(String.valueOf(email));
@@ -166,14 +205,8 @@ public class AccountPreferences extends BasePreferenceFragment<AccountPreference
                 return true;
             }
         });
-        themePreference = (SwitchPreference) findPreference(getString(R.string.pref_account_theme_switch_key));
-        themePreference.setChecked(getControllerFactory().getThemeController().isDarkTheme());
-
-        if (LayoutSpec.isTablet(getActivity())) {
-            PreferenceCategory accountAppearanceCategory = (PreferenceCategory) findPreference(getString(R.string.pref_account_appearance_category_key));
-            if (accountAppearanceCategory != null) {
-                accountAppearanceCategory.removePreference(themePreference);
-            }
+        if (shouldShowUsernameEdit) {
+            changeUsername(getControllerFactory().getUsernameController().getGeneratedUsername(), false);
         }
     }
 
@@ -215,16 +248,6 @@ public class AccountPreferences extends BasePreferenceFragment<AccountPreference
             resetPasswordPreference = null;
         }
         super.onDestroyView();
-    }
-
-    @Override
-    public Event handlePreferenceChanged(SharedPreferences sharedPreferences, String key) {
-        Event event = null;
-        if (key.equals(getString(R.string.pref_account_theme_switch_key))) {
-            getControllerFactory().getThemeController().toggleThemePending(true);
-            event = new ChangedThemeEvent(getControllerFactory().getThemeController().isDarkTheme());
-        }
-        return event;
     }
 
     @Override
@@ -310,6 +333,7 @@ public class AccountPreferences extends BasePreferenceFragment<AccountPreference
                                           getControllerFactory().getTrackingController().tagEvent(new SignOut());
                                           getControllerFactory().getTrackingController().tagEvent(new LoggedOutEvent());
                                           getControllerFactory().getSpotifyController().logout();
+                                          getControllerFactory().getUsernameController().logout();
                                           getStoreFactory().getZMessagingApiStore().logout();
                                       }
                                   },
@@ -391,9 +415,38 @@ public class AccountPreferences extends BasePreferenceFragment<AccountPreference
                                  .commit();
     }
 
+    private void changeUsername(String currentUsername, boolean cancellable) {
+        getControllerFactory().getTrackingController().tagEvent(new EditedUsernameEvent());
+        getChildFragmentManager().beginTransaction()
+                                 .setTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE)
+                                 .add(ChangeUsernamePreferenceDialogFragment.newInstance(currentUsername, cancellable),
+                                      ChangeUsernamePreferenceDialogFragment.TAG)
+                                 .addToBackStack(ChangeUsernamePreferenceDialogFragment.TAG)
+                                 .commit();
+    }
+
     @Override
     public void onAccentColorHasChanged(Object sender, int color) {
         colorPreference.setAccentColor(color);
+    }
+
+    @Override
+    public void onMyUsernameHasChanged(String myUsername) {
+        if (usernamePreference == null) {
+            return;
+        }
+        if (TextUtils.isEmpty(myUsername)) {
+            usernamePreference.setTitle(getString(R.string.pref_account_username_empty_title));
+            usernamePreference.setSummary("");
+        } else {
+            usernamePreference.setTitle(StringUtils.formatUsername(myUsername));
+            usernamePreference.setSummary(getString(R.string.pref_account_username_title));
+        }
+    }
+
+    @Override
+    public void onUsernameChanged(String username) {
+        onMyUsernameHasChanged(username);
     }
 
     public interface Container {

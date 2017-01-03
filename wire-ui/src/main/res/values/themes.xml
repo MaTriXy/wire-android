@@ -34,12 +34,13 @@
         <item name="android:windowAnimationStyle">@style/AnimFadeInZoomOut.Activity</item>
         <item name="dropDownListViewStyle">@style/NoItemBorderListview</item>
         <item name="windowActionModeOverlay">true</item>
-        
+
         <item name="colorControlHighlight" tools:ignore="PrivateResource">@color/ripple_material_dark</item>
 
         <!-- Message Stream -->
         <item name="messageStreamMessage">@style/message_stream__message__dark</item>
         <item name="messageStreamSeparatorName">@style/message_stream__separator_name__dark</item>
+        <item name="messageStreamSeparatorRecalled">@style/message_stream__separator_recalled__dark</item>
         <item name="messageStreamTimestamp">@style/message_stream__timestamp__dark</item>
         <item name="messageStreamTimestampSmall">@style/message_stream__timestamp_small__dark</item>
         <item name="messageStreamSubtitle">@style/message_stream__subtitle__dark</item>
@@ -60,6 +61,7 @@
 
         <!-- Conversation Toolbar -->
         <item name="conversationToolbar">@style/conversation_toolbar__dark</item>
+        <item name="conversationToolbarNoDivider">@style/conversation_toolbar_no_divider__dark</item>
         <item name="conversationToolbarBackground">@drawable/toolbar_background__dark</item>
         <item name="actionModeStyle">@style/conversation_toolbar_action_mode__dark</item>
         <item name="actionModeCloseDrawable">@drawable/ic_action_close_light</item>
@@ -100,9 +102,11 @@
         <item name="circularIconButtonGreen">@style/common__circular_icon_button__green</item>
         <item name="circularIconButtonRed">@style/common__circular_icon_button__red</item>
         <item name="wireBackground">@style/wire__background__dark</item>
+        <item name="wireBackgroundAsTextColor">@style/wire__background_as_text_color__dark</item>
         <item name="strongBackground">@style/common__strong_background__dark</item>
         <item name="wirePrimaryTextColor">@color/text__primary_dark</item>
         <item name="wirePrimaryTextColorReverted">@color/text__primary_light</item>
+        <item name="wireSecondaryTextColor">@color/text__secondary_dark</item>
 
         <!-- Start UI -->
         <item name="startUiErrorLabel">@style/start_ui__error_label__dark</item>
@@ -112,6 +116,7 @@
         <item name="startUiCloseButton">@style/start_ui__close_button__dark</item>
 
         <item name="startUiUserRowLabel">@style/start_ui__user_row__label__dark</item>
+        <item name="startUiUserRowSubLabel">@style/start_ui__user_row__sub_label__dark</item>
         <item name="startUiHeaderRowLabel">@style/start_ui__header_row__label__dark</item>
 
         <item name="wireDivider">@style/common__divider__dark</item>
@@ -146,6 +151,14 @@
         <item name="giphyKeyword">@style/giphy_keyword__dark</item>
         <item name="giphyConversation">@style/giphy_conversation__dark</item>
         <item name="giphyError">@style/giphy_error__dark</item>
+
+        <!-- Typing indicator -->
+        <item name="typingIndicatorBox">@style/typing_indicator_box_dark</item>
+        <item name="typingIndicatorText">@style/typing_indicator_text_dark</item>
+
+        <!-- Start UI Toolbar -->
+        <item name="sketchToolbar">@style/sketch_toolbar</item>
+
     </style>
 
     <style name="Theme.Light" parent="@style/Theme.Design.Light.NoActionBar">
@@ -167,6 +180,7 @@
         <!-- Message Stream -->
         <item name="messageStreamMessage">@style/message_stream__message__light</item>
         <item name="messageStreamSeparatorName">@style/message_stream__separator_name__light</item>
+        <item name="messageStreamSeparatorRecalled">@style/message_stream__separator_recalled__light</item>
         <item name="messageStreamTimestamp">@style/message_stream__timestamp__light</item>
         <item name="messageStreamTimestampSmall">@style/message_stream__timestamp_small__light</item>
         <item name="messageStreamSubtitle">@style/message_stream__subtitle__light</item>
@@ -187,6 +201,7 @@
 
         <!-- Conversation Toolbar -->
         <item name="conversationToolbar">@style/conversation_toolbar__light</item>
+        <item name="conversationToolbarNoDivider">@style/conversation_toolbar_no_divider__light</item>
         <item name="conversationToolbarBackground">@drawable/toolbar_background__light</item>
         <item name="actionModeStyle">@style/conversation_toolbar_action_mode__light</item>
         <item name="actionModeCloseDrawable">@drawable/ic_action_close_dark</item>
@@ -227,9 +242,11 @@
         <item name="circularIconButtonGreen">@style/common__circular_icon_button__green</item>
         <item name="circularIconButtonRed">@style/common__circular_icon_button__red</item>
         <item name="wireBackground">@style/message_stream__background__light</item>
+        <item name="wireBackgroundAsTextColor">@style/wire__background_as_text_color__light</item>
         <item name="strongBackground">@style/common__strong_background__light</item>
         <item name="wirePrimaryTextColor">@color/text__primary_light</item>
         <item name="wirePrimaryTextColorReverted">@color/text__primary_dark</item>
+        <item name="wireSecondaryTextColor">@color/text__secondary_light</item>
 
         <!-- Start UI -->
         <item name="startUiErrorLabel">@style/start_ui__error_label__light</item>
@@ -239,6 +256,7 @@
         <item name="startUiCloseButton">@style/start_ui__close_button__light</item>
 
         <item name="startUiUserRowLabel">@style/start_ui__user_row__label__light</item>
+        <item name="startUiUserRowSubLabel">@style/start_ui__user_row__sub_label__light</item>
         <item name="startUiHeaderRowLabel">@style/start_ui__header_row__label__light</item>
 
         <item name="wireDivider">@style/common__divider__light</item>
@@ -272,6 +290,14 @@
         <item name="giphyKeyword">@style/giphy_keyword__light</item>
         <item name="giphyConversation">@style/giphy_conversation__light</item>
         <item name="giphyError">@style/giphy_error__light</item>
+
+        <!-- Typing indicator -->
+        <item name="typingIndicatorBox">@style/typing_indicator_box_light</item>
+        <item name="typingIndicatorText">@style/typing_indicator_text_light</item>
+
+        <!-- Start UI Toolbar -->
+        <item name="sketchToolbar">@style/sketch_toolbar</item>
+
     </style>
 
     <style name="Theme.Dark.Preferences" parent="@style/Theme.Design.NoActionBar">

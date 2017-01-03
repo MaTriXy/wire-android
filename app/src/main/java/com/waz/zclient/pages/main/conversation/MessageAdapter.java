@@ -24,12 +24,19 @@ import android.widget.BaseAdapter;
 import com.waz.api.Message;
 import com.waz.api.MessagesList;
 import com.waz.zclient.pages.main.conversation.views.MessageViewsContainer;
+import com.waz.zclient.pages.main.conversation.views.row.footer.FooterViewController;
+import com.waz.zclient.pages.main.conversation.views.row.footer.FooterViewControllerFactory;
 import com.waz.zclient.pages.main.conversation.views.row.message.MessageAndSeparatorViewController;
 import com.waz.zclient.pages.main.conversation.views.row.message.MessageViewController;
 import com.waz.zclient.pages.main.conversation.views.row.message.MessageViewControllerFactory;
 import com.waz.zclient.pages.main.conversation.views.row.message.views.TextMessageViewController;
 import com.waz.zclient.pages.main.conversation.views.row.separator.Separator;
 import com.waz.zclient.utils.MessageUtils;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
+import java.util.WeakHashMap;
 import timber.log.Timber;
 
 
@@ -39,8 +46,12 @@ public class MessageAdapter extends BaseAdapter {
     private MessagesList messagesList;
     private Message lastReadMessage;
 
+    private Set<View> weakViewsSet;
+
     public MessageAdapter(MessageViewsContainer container) {
         this.container = container;
+        weakViewsSet = Collections.newSetFromMap(
+            new WeakHashMap<View, Boolean>());
     }
 
     public void resetState() {
@@ -126,15 +137,16 @@ public class MessageAdapter extends BaseAdapter {
 
         if (convertView == null) {
             messageAndSeparator = createNewMessageAndSeparatorViewController(parent, message);
-            convertView = messageAndSeparator.getView().getLayout();
+            convertView = messageAndSeparator.getView();
             convertView.setTag(messageAndSeparator);
+            weakViewsSet.add(convertView);
         } else {
             messageAndSeparator = (MessageAndSeparatorViewController) convertView.getTag();
             if (messageAndSeparator.getMessageViewController() instanceof TextMessageViewController &&
                 message.getMessageType() == Message.Type.RICH_MEDIA) {
                 // Link preview messages can change from TEXT type to RICH MEDIA
                 messageAndSeparator = createNewMessageAndSeparatorViewController(parent, message);
-                convertView = messageAndSeparator.getView().getLayout();
+                convertView = messageAndSeparator.getView();
                 convertView.setTag(messageAndSeparator);
             }
         }
@@ -149,8 +161,16 @@ public class MessageAdapter extends BaseAdapter {
         MessageViewController messageViewController = MessageViewControllerFactory.create(parent.getContext(),
                                                                                           message,
                                                                                           container);
+        FooterViewController footerViewController = FooterViewControllerFactory.create(parent.getContext(), message, container);
         return new MessageAndSeparatorViewController(messageViewController,
+                                                     footerViewController,
                                                      container,
                                                      parent.getContext());
+    }
+
+    public List<View> getActiveViews() {
+        ArrayList<View> activeViews = new ArrayList<>();
+        activeViews.addAll(weakViewsSet);
+        return activeViews;
     }
 }

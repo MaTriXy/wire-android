@@ -25,10 +25,12 @@ import com.waz.zclient.core.controllers.tracking.events.Event;
 public class CompletedMediaActionEvent extends Event {
 
 
-    public CompletedMediaActionEvent(CompletedMediaType type, String conversationType, boolean withOtto) {
+    public CompletedMediaActionEvent(CompletedMediaType type, String conversationType, boolean withBot, boolean isEphemeral, String ephemeralExpiration) {
         attributes.put(Attribute.ACTION, type.nameString);
         attributes.put(Attribute.CONVERSATION_TYPE, conversationType);
-        attributes.put(Attribute.WITH_OTTO, String.valueOf(withOtto));
+        attributes.put(Attribute.WITH_OTTO, String.valueOf(withBot));
+        attributes.put(Attribute.IS_EPHEMERAL, String.valueOf(isEphemeral));
+        attributes.put(Attribute.EPHEMERAL_EXPIRATION, ephemeralExpiration);
     }
 
     @NonNull

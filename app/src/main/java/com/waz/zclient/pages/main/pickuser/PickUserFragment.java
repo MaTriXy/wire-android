@@ -17,11 +17,14 @@
  */
 package com.waz.zclient.pages.main.pickuser;
 
+import android.Manifest;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
+import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
@@ -39,8 +42,9 @@ import com.waz.api.ContactDetails;
 import com.waz.api.ContactMethod;
 import com.waz.api.Contacts;
 import com.waz.api.IConversation;
+import com.waz.api.NetworkMode;
 import com.waz.api.User;
-import com.waz.api.UsersSearchResult;
+import com.waz.api.UserSearchResult;
 import com.waz.zclient.OnBackPressedListener;
 import com.waz.zclient.R;
 import com.waz.zclient.controllers.accentcolor.AccentColorObserver;
@@ -48,12 +52,15 @@ import com.waz.zclient.controllers.currentfocus.IFocusController;
 import com.waz.zclient.controllers.globallayout.KeyboardHeightObserver;
 import com.waz.zclient.controllers.globallayout.KeyboardVisibilityObserver;
 import com.waz.zclient.controllers.navigation.NavigationController;
+import com.waz.zclient.controllers.permission.RequestPermissionsObserver;
+import com.waz.zclient.controllers.tracking.events.connect.EnteredSearchEvent;
+import com.waz.zclient.controllers.tracking.events.connect.OpenedConversationEvent;
 import com.waz.zclient.controllers.tracking.events.connect.OpenedGenericInviteMenuEvent;
+import com.waz.zclient.controllers.tracking.events.connect.SelectedTopUser;
 import com.waz.zclient.controllers.tracking.events.connect.SentConnectRequestEvent;
-import com.waz.zclient.controllers.tracking.events.peoplepicker.PeoplePickerSelectSearchUser;
-import com.waz.zclient.controllers.tracking.events.peoplepicker.PeoplePickerSelectTopUser;
 import com.waz.zclient.controllers.tracking.screens.ApplicationScreen;
 import com.waz.zclient.core.api.scala.ModelObserver;
+import com.waz.zclient.core.controllers.tracking.attributes.ConversationType;
 import com.waz.zclient.core.stores.conversation.ConversationChangeRequester;
 import com.waz.zclient.core.stores.conversation.InboxLoadRequester;
 import com.waz.zclient.core.stores.conversation.OnInboxLoadedListener;
@@ -75,6 +82,8 @@ import com.waz.zclient.ui.text.TypefaceTextView;
 import com.waz.zclient.ui.utils.KeyboardUtils;
 import com.waz.zclient.ui.views.ZetaButton;
 import com.waz.zclient.utils.LayoutSpec;
+import com.waz.zclient.utils.PermissionUtils;
+import com.waz.zclient.utils.StringUtils;
 import com.waz.zclient.utils.TrackingUtils;
 import com.waz.zclient.utils.ViewUtils;
 import com.waz.zclient.utils.device.DeviceDetector;
@@ -97,7 +106,8 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
                                                                                           OnBackPressedListener,
                                                                                           SearchResultOnItemTouchListener.Callback,
                                                                                           SearchResultAdapter.Callback,
-                                                                                          PickUserControllerSearchObserver {
+                                                                                          PickUserControllerSearchObserver,
+                                                                                          RequestPermissionsObserver {
     public static final String TAG = PickUserFragment.class.getName();
 
     public static final String ARGUMENT_ADD_TO_CONVERSATION = "ARGUMENT_ADD_TO_CONVERSATION";
@@ -105,9 +115,11 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
 
     public static final int NUM_SEARCH_RESULTS_LIST = 30;
     public static final int NUM_SEARCH_RESULTS_TOP_USERS = 24;
+    public static final int NUM_SEARCH_RESULTS_ADD_TO_CONV = 1000;
 
     private static final int DEFAULT_SELECTED_INVITE_METHOD = 0;
     private static final int SHOW_KEYBOARD_THRETHOLD = 10;
+
     private RecyclerView searchResultRecyclerView;
     private SearchResultAdapter searchResultAdapter;
 
@@ -153,7 +165,7 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
         @Override
         public void onRemovedTokenSpan(User user) {
             getControllerFactory().getPickUserController().removeUser(user);
-            if (getArguments().getBoolean(ARGUMENT_ADD_TO_CONVERSATION)) {
+            if (isAddingToConversation()) {
                 setConversationQuickMenuVisible(false);
             }
         }
@@ -168,13 +180,13 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
         }
     };
 
-    private final ModelObserver<UsersSearchResult> usersSearchModelObserver = new ModelObserver<UsersSearchResult>() {
+    private final ModelObserver<UserSearchResult> usersSearchModelObserver = new ModelObserver<UserSearchResult>() {
         @Override
-        public void updated(UsersSearchResult model) {
+        public void updated(UserSearchResult model) {
             if (getContainer() != null) {
                 getContainer().getLoadingViewIndicator().hide();
             }
-            if (model.getContacts() == null || model.getContacts().length == 0) {
+            if (model.getAll().length == 0) {
                 PickUserDataState dataState = getDataState(getControllerFactory().getPickUserController().hasSelectedUsers());
                 if (dataState == PickUserDataState.SHOW_ALL_USERS_TO_ADD_TO_CONVERSATION) {
                     handleEmptySearchResult(getString(R.string.people_picker__error_message__no_users_to_add_to_conversation), "", false);
@@ -183,7 +195,7 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
                 }
             } else {
                 hideErrorMessage();
-                searchResultAdapter.setSearchResult(model.getContacts(), null, null);
+                searchResultAdapter.setSearchResult(model.getAll(), null, null);
             }
         }
     };
@@ -226,7 +238,7 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
 
         if (enter) {
             // Fade animation in participants dialog on tablet
-            if (LayoutSpec.isTablet(getActivity()) && getArguments().getBoolean(ARGUMENT_ADD_TO_CONVERSATION)) {
+            if (LayoutSpec.isTablet(getActivity()) && isAddingToConversation()) {
                 return new FadeAnimation(getResources().getInteger(R.integer.open_new_conversation__top_conversation__animation_duration), 0f, 1f);
             }
             return new DefaultPageTransitionAnimation(0,
@@ -265,7 +277,7 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
         searchResultRecyclerView.setLayoutManager(new LinearLayoutManager(getActivity()));
         searchResultRecyclerView.setAdapter(searchResultAdapter);
         searchResultRecyclerView.addOnItemTouchListener(new SearchResultOnItemTouchListener(getActivity(), this));
-        if (getArguments().getBoolean(ARGUMENT_ADD_TO_CONVERSATION)) {
+        if (isAddingToConversation()) {
             searchResultRecyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
                 @Override
                 public void onScrollStateChanged(RecyclerView recyclerView, int newState) {
@@ -303,7 +315,7 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
 
         showLoadingBarDelay = getResources().getInteger(R.integer.people_picker__loading_bar__show_delay);
 
-        if (getArguments().getBoolean(ARGUMENT_ADD_TO_CONVERSATION)) {
+        if (isAddingToConversation()) {
             genericInviteContainer.setVisibility(View.GONE);
             searchBoxView.setHintText(getString(R.string.pick_user_search__add_to_conversation));
             searchBoxView.showClearButton(false);
@@ -345,7 +357,8 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
         getControllerFactory().getGlobalLayoutController().addKeyboardVisibilityObserver(this);
         getControllerFactory().getAccentColorController().addAccentColorObserver(this);
         getControllerFactory().getPickUserController().addPickUserSearchControllerObserver(this);
-        if (getArguments().getBoolean(ARGUMENT_ADD_TO_CONVERSATION) && !getArguments().getBoolean(ARGUMENT_GROUP_CONVERSATION)) {
+        getControllerFactory().getRequestPermissionsController().addObserver(this);
+        if (isAddingToConversation() && !getArguments().getBoolean(ARGUMENT_GROUP_CONVERSATION)) {
             new Handler().post(new Runnable() {
                 @Override
                 public void run() {
@@ -362,6 +375,14 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
         }
 
         loadStartUi();
+        usersSearchModelObserver.resumeListening();
+        usersSearchModelObserver.forceUpdate();
+
+        boolean hasShareContactsEnabled = getControllerFactory().getUserPreferencesController().hasShareContactsEnabled();
+        boolean hasContactsReadPermission = PermissionUtils.hasSelfPermissions(getContext(), Manifest.permission.READ_CONTACTS);
+        if (hasShareContactsEnabled && !hasContactsReadPermission) {
+                ActivityCompat.requestPermissions(getActivity(), new String[]{Manifest.permission.READ_CONTACTS}, PermissionUtils.REQUEST_READ_CONTACTS);
+        }
     }
 
     @Override
@@ -370,7 +391,7 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
         genericInviteButton.setOnClickListener(this);
         userSelectionConfirmationButton.setOnClickListener(this);
         errorMessageViewSendInvite.setOnClickListener(this);
-        if (!getArguments().getBoolean(ARGUMENT_ADD_TO_CONVERSATION)) {
+        if (!isAddingToConversation()) {
             new Handler().postDelayed(new Runnable() {
                 @Override
                 public void run() {
@@ -406,6 +427,8 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
         getControllerFactory().getGlobalLayoutController().removeKeyboardHeightObserver(this);
         getControllerFactory().getAccentColorController().removeAccentColorObserver(this);
         getControllerFactory().getPickUserController().removePickUserSearchControllerObserver(this);
+        getControllerFactory().getRequestPermissionsController().removeObserver(this);
+        usersSearchModelObserver.pauseListening();
         super.onStop();
     }
 
@@ -452,7 +475,7 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
 
     @Override
     public void onTopUsersUpdated(User[] users) {
-        if (getArguments().getBoolean(ARGUMENT_ADD_TO_CONVERSATION)) {
+        if (isAddingToConversation()) {
             return;
         }
         getContainer().getLoadingViewIndicator().hide();
@@ -482,17 +505,12 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
     }
 
     @Override
-    public void onRecommendedUsersUpdated(User[] users) {
-
-    }
-
-    @Override
     public void onSearchResultsUpdated(User[] connectedUsers, User[] otherUsers, IConversation[] conversations) {
         getContainer().getLoadingViewIndicator().hide();
 
         String errorHeader = getString(R.string.people_picker__error_message__no_results);
         String errorBody;
-        if (getArguments().getBoolean(ARGUMENT_ADD_TO_CONVERSATION)) {
+        if (isAddingToConversation()) {
             errorBody = getString(R.string.people_picker__error_message__no_results__shared_contacts__add_to_conversation);
         } else {
             errorBody = getControllerFactory().getPickUserController().searchInputIsInvalidEmail() ?
@@ -562,10 +580,9 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
         }
         getContainer().getLoadingViewIndicator().setColor(color);
 
-        if (getArguments().getBoolean(ARGUMENT_ADD_TO_CONVERSATION)) {
+        if (isAddingToConversation()) {
             return;
         }
-        
 
         int inviteVisibility = keyboardIsVisible ||  getControllerFactory().getPickUserController().hasSelectedUsers() ? View.GONE : View.VISIBLE;
         genericInviteContainer.setVisibility(inviteVisibility);
@@ -647,7 +664,7 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
 
         List<User> users = getControllerFactory().getPickUserController().getSelectedUsers();
         int minUsers = 1;
-        if (getArguments().getBoolean(ARGUMENT_ADD_TO_CONVERSATION) && !getArguments().getBoolean(ARGUMENT_GROUP_CONVERSATION)) {
+        if (isAddingToConversation() && !getArguments().getBoolean(ARGUMENT_GROUP_CONVERSATION)) {
             minUsers = 2;
         }
         if (users.size() >= minUsers) {
@@ -726,17 +743,11 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
             return;
         }
 
-        if (anchorView instanceof ChatheadWithTextFooter) {
-            getControllerFactory().getTrackingController().tagEvent(new PeoplePickerSelectTopUser());
-        } else {
-            int rowType = searchResultAdapter.getItemViewType(position);
-            switch (rowType) {
-                case SearchResultAdapter.ITEM_TYPE_CONNECTED_USER:
-                case SearchResultAdapter.ITEM_TYPE_OTHER_USER:
-                    getControllerFactory().getTrackingController().tagEvent(new PeoplePickerSelectSearchUser(position));
-                    break;
-            }
-        }
+        TrackingUtils.onUserSelectedInStartUI(getControllerFactory().getTrackingController(),
+                                              user,
+                                              anchorView instanceof ChatheadWithTextFooter,
+                                              isAddingToConversation(),
+                                              searchResultAdapter.getItemViewType(position));
 
         // Selecting user from search results toggles user token and confirmation button
         if (user.getConnectionStatus() == User.ConnectionStatus.ACCEPTED) {
@@ -771,7 +782,8 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
             return;
         }
 
-        getControllerFactory().getTrackingController().tagEvent(new PeoplePickerSelectTopUser());
+        getControllerFactory().getTrackingController().tagEvent(new SelectedTopUser());
+        getControllerFactory().getTrackingController().tagEvent(new OpenedConversationEvent(ConversationType.ONE_TO_ONE_CONVERSATION.name()));
         getStoreFactory().getConversationStore().setCurrentConversation(user.getConversation(),
                                                                         ConversationChangeRequester.START_CONVERSATION);
     }
@@ -781,6 +793,7 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
         KeyboardUtils.hideKeyboard(getActivity());
         getStoreFactory().getConversationStore().setCurrentConversation(conversation,
                                                                         ConversationChangeRequester.START_CONVERSATION);
+        getControllerFactory().getTrackingController().tagEvent(new OpenedConversationEvent(ConversationType.GROUP_CONVERSATION.name()));
     }
 
     //////////////////////////////////////////////////////////////////////////////////////////
@@ -820,9 +833,9 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
 
     @Override
     public void onContactListContactClicked(final ContactDetails contactDetails) {
-        getStoreFactory().getNetworkStore().doIfNetwork(new DefaultNetworkAction() {
+        getStoreFactory().getNetworkStore().doIfHasInternetOrNotifyUser(new DefaultNetworkAction() {
             @Override
-            public void execute() {
+            public void execute(NetworkMode networkMode) {
                 final int contactMethodsCount = contactDetails.getContactMethods().size();
                 final ContactMethod[] contactMethods = contactDetails.getContactMethods().toArray(new ContactMethod[contactMethodsCount]);
 
@@ -831,7 +844,7 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
                     // Launch SMS app directly if contact only has phone numner
                     final String number = contactMethods[0].getStringRepresentation();
                     sendSMSInvite(number);
-                    getControllerFactory().getTrackingController().tagEvent(new OpenedGenericInviteMenuEvent(OpenedGenericInviteMenuEvent.EventContext.STARTUI_CONTACT));
+                    getControllerFactory().getTrackingController().tagEvent(new OpenedGenericInviteMenuEvent(OpenedGenericInviteMenuEvent.EventContext.ADDRESSBOOK));
                     return;
                 }
 
@@ -862,7 +875,7 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
                                                   if (selectedContactMethod.getKind() == ContactMethod.Kind.SMS) {
                                                       final String number = String.valueOf(itemNames[selected]);
                                                       sendSMSInvite(number);
-                                                      getControllerFactory().getTrackingController().tagEvent(new OpenedGenericInviteMenuEvent(OpenedGenericInviteMenuEvent.EventContext.STARTUI_CONTACT));
+                                                      getControllerFactory().getTrackingController().tagEvent(new OpenedGenericInviteMenuEvent(OpenedGenericInviteMenuEvent.EventContext.ADDRESSBOOK));
                                                   } else {
                                                       selectedContactMethod.invite(" ", null);
                                                       Toast.makeText(getActivity(),
@@ -896,9 +909,19 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
     }
 
     private void sendSMSInvite(String number) {
-        Intent intent = new Intent(Intent.ACTION_SENDTO, Uri.fromParts("sms", number, ""));
-        intent.putExtra("sms_body", getString(R.string.people_picker__invite__share_text__body));
-        startActivity(intent);
+        User me = getStoreFactory().getProfileStore().getSelfUser();
+        if (me != null) {
+            String smsBody;
+            String username = me.getUsername();
+            if (TextUtils.isEmpty(username)) {
+                smsBody = getString(R.string.people_picker__invite__share_text__body, me.getName());
+            } else {
+                smsBody = getString(R.string.people_picker__invite__share_text__body, StringUtils.formatUsername(username));
+            }
+            Intent intent = new Intent(Intent.ACTION_SENDTO, Uri.fromParts("sms", number, ""));
+            intent.putExtra("sms_body", smsBody);
+            startActivity(intent);
+        }
     }
 
     @Override
@@ -927,10 +950,10 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
                 filter = "";
             case SHOW_SEARCH_RESULTS_TO_ADD_TO_CONVERSATION:
                 String[] excludedUsers = getStoreFactory().getPickUserStore().getExcludedUsers();
-                UsersSearchResult usersSearchResult = getStoreFactory().getZMessagingApiStore()
+                UserSearchResult usersSearchResult = getStoreFactory().getZMessagingApiStore()
                                                                        .getApi()
                                                                        .search()
-                                                                       .getConnections(filter, excludedUsers);
+                                                                       .getConnectionsByName(filter, NUM_SEARCH_RESULTS_ADD_TO_CONV, excludedUsers);
                 usersSearchModelObserver.setAndUpdate(usersSearchResult);
                 break;
             case SHOW_SEARCH_RESULTS:
@@ -938,10 +961,11 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
                 if (!hasSelectedUsers) {
                     getStoreFactory().getPickUserStore().searchContacts(filter);
                 }
+                getControllerFactory().getTrackingController().tagEvent(new EnteredSearchEvent(isAddingToConversation(), filter));
                 break;
             case SHOW_TOP_USERS_AS_LIST:
             case SHOW_TOP_USERS_AND_RECOMMENDED:
-                boolean excludeConversationParticipants = getArguments().getBoolean(ARGUMENT_ADD_TO_CONVERSATION) &&
+                boolean excludeConversationParticipants = isAddingToConversation() &&
                                                           getArguments().getBoolean(ARGUMENT_GROUP_CONVERSATION);
                 getStoreFactory().getPickUserStore().loadTopUserList(NUM_SEARCH_RESULTS_TOP_USERS, excludeConversationParticipants);
                 break;
@@ -967,7 +991,7 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
             errorMessageViewBody.setVisibility(View.GONE);
         }
 
-        if (SHOW_INVITE && !getArguments().getBoolean(ARGUMENT_ADD_TO_CONVERSATION)) {
+        if (SHOW_INVITE && !isAddingToConversation()) {
             errorMessageViewSendInvite.setVisibility(View.VISIBLE);
         } else {
             errorMessageViewSendInvite.setVisibility(View.GONE);
@@ -1000,13 +1024,16 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
             getStoreFactory().isTornDown()) {
             return;
         }
-        shareBody = getString(R.string.people_picker__invite__share_text__body);
 
         String name = "";
+        String username = "";
         if (getStoreFactory().getProfileStore().getSelfUser() != null &&
             getStoreFactory().getProfileStore().getSelfUser().getDisplayName() != null) {
             name = getStoreFactory().getProfileStore().getSelfUser().getDisplayName();
+            username = getStoreFactory().getProfileStore().getSelfUser().getUsername();
         }
+
+        shareBody = getString(R.string.people_picker__invite__share_text__body, StringUtils.formatUsername(username));
         String shareSubject = getString(R.string.people_picker__invite__share_text__header, name);
         String shareChooserMessage = getString(R.string.people_picker__invite__share_details_dialog);
         Intent sharingIntent = new Intent(Intent.ACTION_SEND);
@@ -1015,8 +1042,8 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
         sharingIntent.putExtra(Intent.EXTRA_TEXT, shareBody);
         startActivity(Intent.createChooser(sharingIntent, shareChooserMessage));
         OpenedGenericInviteMenuEvent.EventContext eventContext = fromSearch ?
-                                                                 OpenedGenericInviteMenuEvent.EventContext.STARTUI_SEARCH :
-                                                                 OpenedGenericInviteMenuEvent.EventContext.STARTUI_BANNER;
+                                                                 OpenedGenericInviteMenuEvent.EventContext.NO_RESULTS :
+                                                                 OpenedGenericInviteMenuEvent.EventContext.BANNER;
         getControllerFactory().getTrackingController().tagEvent(new OpenedGenericInviteMenuEvent(eventContext));
         getControllerFactory().getTrackingController().onApplicationScreen(ApplicationScreen.SEND_GENERIC_INVITE_MENU);
     }
@@ -1024,7 +1051,7 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
     private void showUser(User user, View anchorView) {
         switch (user.getConnectionStatus()) {
             case ACCEPTED:
-                if (getArguments().getBoolean(ARGUMENT_ADD_TO_CONVERSATION)) {
+                if (isAddingToConversation()) {
                     ArrayList<User> users = new ArrayList<>();
                     users.add(user);
                     getContainer().onSelectedUsers(users, ConversationChangeRequester.START_CONVERSATION);
@@ -1064,7 +1091,7 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
             getControllerFactory().isTornDown()) {
             return;
         }
-        if (getArguments().getBoolean(ARGUMENT_ADD_TO_CONVERSATION)) {
+        if (isAddingToConversation()) {
             int numberOfSelectedUsers = getControllerFactory().getPickUserController().getSelectedUsers().size();
             boolean visible = getArguments().getBoolean(ARGUMENT_GROUP_CONVERSATION) ? numberOfSelectedUsers > 0 : numberOfSelectedUsers > 1;
             userSelectionConfirmationContainer.setVisibility(visible ? View.VISIBLE : View.GONE);
@@ -1124,20 +1151,23 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
     private PickUserDataState getDataState(boolean hasSelectedUsers) {
         PickUserDataState dataState = PickUserDataState.SHOW_TOP_USERS_AND_RECOMMENDED;
 
-        boolean isAddingToConversation = getArguments().getBoolean(ARGUMENT_ADD_TO_CONVERSATION);
         if (!TextUtils.isEmpty(getControllerFactory().getPickUserController().getSearchFilter())) {
-            if (isAddingToConversation) {
+            if (isAddingToConversation()) {
                 dataState = PickUserDataState.SHOW_SEARCH_RESULTS_TO_ADD_TO_CONVERSATION;
             } else {
                 dataState = PickUserDataState.SHOW_SEARCH_RESULTS;
             }
-        } else if (isAddingToConversation) {
+        } else if (isAddingToConversation()) {
             dataState = PickUserDataState.SHOW_ALL_USERS_TO_ADD_TO_CONVERSATION;
         } else if (hasSelectedUsers) {
             dataState = PickUserDataState.SHOW_TOP_USERS_AS_LIST;
         }
 
         return dataState;
+    }
+
+    private boolean isAddingToConversation() {
+        return getArguments().getBoolean(ARGUMENT_ADD_TO_CONVERSATION);
     }
 
     private void closeStartUI() {
@@ -1156,5 +1186,19 @@ public class PickUserFragment extends BaseFragment<PickUserFragment.Container> i
         LoadingIndicatorView getLoadingViewIndicator();
 
         IPickUserController.Destination getCurrentPickerDestination();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, int[] grantResults) {
+        if (requestCode == PermissionUtils.REQUEST_READ_CONTACTS &&
+            grantResults.length > 0 &&
+            grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+
+            //Changing the value of the shareContacts seems to be the
+            //only way to trigger a refresh on the sync engine...
+            boolean oldConfig = getControllerFactory().getUserPreferencesController().hasShareContactsEnabled();
+            getControllerFactory().getUserPreferencesController().setShareContactsEnabled(!oldConfig);
+            getControllerFactory().getUserPreferencesController().setShareContactsEnabled(oldConfig);
+        }
     }
 }

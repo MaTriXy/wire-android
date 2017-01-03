@@ -20,63 +20,63 @@ package com.waz.zclient.pages.main.conversation.views.row.message.views;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
 import android.support.v4.content.ContextCompat;
-import android.support.v7.widget.CardView;
-import android.view.Gravity;
 import android.view.View;
-import android.view.View.OnClickListener;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.TextView;
+import com.waz.api.BitmapCallback;
 import com.waz.api.ImageAsset;
 import com.waz.api.LoadHandle;
 import com.waz.api.Message;
 import com.waz.api.MessageContent;
 import com.waz.zclient.R;
 import com.waz.zclient.controllers.accentcolor.AccentColorObserver;
-import com.waz.zclient.controllers.selection.MessageActionModeController;
-import com.waz.zclient.core.controllers.tracking.events.media.OpenedSharedLocationEvent;
+import com.waz.zclient.controllers.tracking.events.conversation.ReactedToMessageEvent;
+import com.waz.zclient.controllers.userpreferences.IUserPreferencesController;
 import com.waz.zclient.core.api.scala.ModelObserver;
+import com.waz.zclient.core.controllers.tracking.events.media.OpenedSharedLocationEvent;
 import com.waz.zclient.pages.main.conversation.views.MessageViewsContainer;
-import com.waz.zclient.pages.main.conversation.views.row.message.RetryMessageViewController;
+import com.waz.zclient.pages.main.conversation.views.row.message.MessageViewController;
 import com.waz.zclient.pages.main.conversation.views.row.separator.Separator;
 import com.waz.zclient.ui.text.GlyphTextView;
 import com.waz.zclient.ui.theme.ThemeUtils;
 import com.waz.zclient.ui.utils.ColorUtils;
-import com.waz.zclient.ui.views.FilledCircularBackgroundDrawable;
-import com.waz.zclient.ui.views.TouchFilterableLayout;
-import com.waz.zclient.ui.views.TouchFilterableLinearLayout;
+import com.waz.zclient.ui.utils.ResourceUtils;
+import com.waz.zclient.ui.utils.TypefaceUtils;
+import com.waz.zclient.ui.views.EphemeralDotAnimationView;
+import com.waz.zclient.ui.views.OnDoubleClickListener;
 import com.waz.zclient.utils.IntentUtils;
 import com.waz.zclient.utils.LayoutSpec;
 import com.waz.zclient.utils.StringUtils;
 import com.waz.zclient.utils.ViewUtils;
 import timber.log.Timber;
 
-public class LocationMessageViewController extends RetryMessageViewController implements OnClickListener,
-                                                                                         View.OnLongClickListener,
-                                                                                         AccentColorObserver,
-                                                                                         MessageActionModeController.Selectable {
+public class LocationMessageViewController extends MessageViewController implements AccentColorObserver {
 
     private static final String TAG = LocationMessageViewController.class.getName();
     private static final String FULL_IMAGE_LOADED = "FULL_IMAGE_LOADED";
 
-    private TouchFilterableLinearLayout view;
-    private CardView selectionContainer;
-    private FrameLayout errorViewContainer;
+    private View view;
     private FrameLayout imageContainer;
     private ImageView mapImageView;
     private TextView locationName;
+    private View pinImage;
+    private TextView mapPlaceholderText;
+    private GlyphTextView pinView;
+    private EphemeralDotAnimationView ephemeralDotAnimationView;
+    private View ephemeralTypeView;
 
     private ImageAsset imageAsset;
     private LoadHandle bitmapLoadHandle;
-    private GlyphTextView pinView;
-    private View pinImage;
-    private TextView mapPlaceholderText;
+    private final Typeface originalLocationNameTypeface;
+    private final int originalLocationNameTextColor;
 
     private int imageWidth;
 
-    private ModelObserver<ImageAsset> imageAssetModelObserver = new ModelObserver<ImageAsset>() {
+    private final ModelObserver<ImageAsset> imageAssetModelObserver = new ModelObserver<ImageAsset>() {
         @Override
         public void updated(ImageAsset model) {
             if (context == null) {
@@ -86,9 +86,14 @@ public class LocationMessageViewController extends RetryMessageViewController im
         }
     };
 
-    private ModelObserver<Message> messageModelObserver = new ModelObserver<Message>() {
+    private final ModelObserver<Message> messageModelObserver = new ModelObserver<Message>() {
         @Override
-        public void updated(Message model) {
+        public void updated(Message message) {
+            if (message.isEphemeral() && message.isExpired()) {
+                messageExpired();
+                return;
+            }
+
             mapImageView.setTag(message.getId());
             if (imageWidth > 0) {
                 imageAsset = message.getImage(imageWidth, context.getResources().getDimensionPixelSize(R.dimen.content__location_message__map_height));
@@ -106,14 +111,48 @@ public class LocationMessageViewController extends RetryMessageViewController im
         }
     };
 
+    private final OnDoubleClickListener onDoubleClickListener = new OnDoubleClickListener() {
+        @Override
+        public void onDoubleClick() {
+            if (message.isEphemeral()) {
+                return;
+            } else if (message.isLikedByThisUser()) {
+                message.unlike();
+                messageViewsContainer.getControllerFactory().getTrackingController().tagEvent(ReactedToMessageEvent.unlike(message.getConversation(),
+                                                                                                                           message,
+                                                                                                                           ReactedToMessageEvent.Method.DOUBLE_TAP));
+            } else {
+                message.like();
+                messageViewsContainer.getControllerFactory().getUserPreferencesController().setPerformedAction(IUserPreferencesController.LIKED_MESSAGE);
+                messageViewsContainer.getControllerFactory().getTrackingController().tagEvent(ReactedToMessageEvent.like(message.getConversation(),
+                                                                                                                         message,
+                                                                                                                         ReactedToMessageEvent.Method.DOUBLE_TAP));
+            }
+        }
+
+        @Override
+        public void onSingleClick() {
+            MessageContent.Location location = message.getLocation();
+            Intent intent = IntentUtils.getGoogleMapsIntent(context, location.getLatitude(), location.getLongitude(), location.getZoom(), location.getName());
+            if (intent == null) {
+                return;
+            }
+            messageViewsContainer.getControllerFactory().getTrackingController().tagEvent(new OpenedSharedLocationEvent(
+                getConversationTypeString(),
+                !message.getUser().isMe()));
+            context.startActivity(intent);
+            if (footerActionCallback != null) {
+                footerActionCallback.toggleVisibility();
+            }
+        }
+    };
+
     public LocationMessageViewController(Context context, MessageViewsContainer messageViewContainer) {
         super(context, messageViewContainer);
-        view = (TouchFilterableLinearLayout) View.inflate(context, R.layout.row_conversation_location, null);
+        view = View.inflate(context, R.layout.row_conversation_location, null);
 
-        selectionContainer = ViewUtils.getView(view, R.id.cv__location_map_container);
-        errorViewContainer = ViewUtils.getView(view, R.id.fl__row_conversation__message_error_container);
         imageContainer = ViewUtils.getView(view, R.id.fl__row_conversation__map_image_container);
-        imageContainer.setOnClickListener(this);
+        imageContainer.setOnClickListener(onDoubleClickListener);
         imageContainer.setOnLongClickListener(this);
         mapImageView = ViewUtils.getView(view, R.id.biv__row_conversation__map_image);
         locationName = ViewUtils.getView(view, R.id.ttv__row_conversation_map_name);
@@ -121,26 +160,24 @@ public class LocationMessageViewController extends RetryMessageViewController im
         pinView = ViewUtils.getView(view, R.id.gtv__row_conversation__map_pin_glyph);
         pinImage = ViewUtils.getView(view, R.id.iv__row_conversation__map_pin_image);
         pinView.setTextColor(ContextCompat.getColor(context, R.color.accent_blue));
-        TextView unsentView = ViewUtils.getView(view, R.id.v__row_conversation__error);
-        final int circleFillColor = ThemeUtils.isDarkTheme(context) ? context.getResources().getColor(R.color.content__image__progress_circle_background_dark)
-                                                                    : context.getResources().getColor(R.color.content__image__progress_circle_background_light);
-        final int circleRadius = context.getResources().getDimensionPixelSize(R.dimen.content__message__unsend_indicator_background_radius);
-        final int circleDiameter = 2 * circleRadius;
-        unsentView.setBackground(new FilledCircularBackgroundDrawable(circleFillColor, circleDiameter));
-        unsentView.requestLayout();
+        ephemeralDotAnimationView = ViewUtils.getView(view, R.id.edav__ephemeral_view);
+        ephemeralTypeView = ViewUtils.getView(view, R.id.gtv__row_conversation__location__ephemeral_type);
+        ephemeralTypeView.setVisibility(View.GONE);
 
         imageWidth = getImageWidth();
+        originalLocationNameTypeface = locationName.getTypeface();
+        originalLocationNameTextColor = locationName.getCurrentTextColor();
         afterInit();
     }
 
     @Override
-    public TouchFilterableLayout getView() {
+    public View getView() {
         return view;
     }
 
     @Override
     protected void onSetMessage(Separator separator) {
-        super.onSetMessage(separator);
+        onDoubleClickListener.reset();
         messageModelObserver.addAndUpdate(message);
         messageViewsContainer.getControllerFactory().getAccentColorController().addAccentColorObserver(this);
 
@@ -151,6 +188,7 @@ public class LocationMessageViewController extends RetryMessageViewController im
             locationName.setText(location.getName());
             locationName.setVisibility(View.VISIBLE);
         }
+        ephemeralDotAnimationView.setMessage(message);
     }
 
     private void loadBitmap(int finalViewWidth) {
@@ -158,11 +196,10 @@ public class LocationMessageViewController extends RetryMessageViewController im
             bitmapLoadHandle.cancel();
         }
 
-        bitmapLoadHandle = imageAsset.getBitmap(finalViewWidth, new ImageAsset.BitmapCallback() {
+        bitmapLoadHandle = imageAsset.getBitmap(finalViewWidth, new BitmapCallback() {
             @Override
-            public void onBitmapLoaded(Bitmap bitmap, boolean isPreview) {
-                if (isPreview ||
-                    mapImageView == null ||
+            public void onBitmapLoaded(Bitmap bitmap) {
+                if (mapImageView == null ||
                     message == null ||
                     !mapImageView.getTag().equals(message.getId()) ||
                     messageViewsContainer.isTornDown()) {
@@ -179,8 +216,6 @@ public class LocationMessageViewController extends RetryMessageViewController im
                     showFinalImage(bitmap);
                 }
             }
-
-            @Override public void onBitmapLoadingFailed() { }
         });
     }
 
@@ -217,9 +252,8 @@ public class LocationMessageViewController extends RetryMessageViewController im
         if (!messageViewsContainer.isTornDown()) {
             messageViewsContainer.getControllerFactory().getAccentColorController().removeAccentColorObserver(this);
         }
-
-        errorViewContainer.clearAnimation();
-        errorViewContainer.setVisibility(View.VISIBLE);
+        ephemeralDotAnimationView.setMessage(null);
+        onDoubleClickListener.reset();
         mapImageView.animate().cancel();
         mapImageView.setVisibility(View.INVISIBLE);
         mapImageView.setImageDrawable(null);
@@ -228,6 +262,8 @@ public class LocationMessageViewController extends RetryMessageViewController im
         mapPlaceholderText.setVisibility(View.VISIBLE);
 
         locationName.setText("");
+        locationName.setTypeface(originalLocationNameTypeface);
+        locationName.setTextColor(originalLocationNameTextColor);
         view.setTag(null);
         imageAssetModelObserver.clear();
         messageModelObserver.clear();
@@ -240,53 +276,35 @@ public class LocationMessageViewController extends RetryMessageViewController im
     }
 
     @Override
-    public void onClick(View v) {
-        MessageContent.Location location = message.getLocation();
-        Intent intent = IntentUtils.getGoogleMapsIntent(context, location.getLatitude(), location.getLongitude(), location.getZoom(), location.getName());
-        if (intent == null) {
-            return;
-        }
-        messageViewsContainer.getControllerFactory().getTrackingController().tagEvent(new OpenedSharedLocationEvent(
-            getConversationTypeString(),
-            !message.getUser().isMe()));
-        context.startActivity(intent);
-    }
-
-    @Override
-    public boolean onLongClick(View v) {
-        if (message == null ||
-            messageViewsContainer == null ||
-            messageViewsContainer.isTornDown() ||
-            getSelectionView() == null) {
-            return false;
-        }
-        messageViewsContainer.getControllerFactory().getMessageActionModeController().selectMessage(message);
-        return true;
-    }
-
-    @Override
-    protected void setSelected(boolean selected) {
-        super.setSelected(selected);
-        if (message == null ||
-            messageViewsContainer == null ||
-            messageViewsContainer.isTornDown() ||
-            getSelectionView() == null) {
-            return;
-        }
-        final int accentColor = messageViewsContainer.getControllerFactory().getAccentColorController().getColor();
-        int targetAccentColor;
-        if (selected) {
-            targetAccentColor = ColorUtils.injectAlpha(selectionAlpha, accentColor);
-        } else {
-            targetAccentColor = ContextCompat.getColor(context, R.color.transparent);
-        }
-        selectionContainer.setForeground(new ColorDrawable(targetAccentColor));
-        selectionContainer.setForegroundGravity(Gravity.FILL);
-    }
-
-    @Override
     public void onAccentColorHasChanged(Object sender, int color) {
-        super.onAccentColorHasChanged(sender, color);
         pinView.setTextColor(color);
+        ephemeralDotAnimationView.setPrimaryColor(color);
+        ephemeralDotAnimationView.setSecondaryColor(ColorUtils.injectAlpha(ResourceUtils.getResourceFloat(context.getResources(), R.dimen.ephemeral__accent__timer_alpha),
+                                                                           color));
+        if (message != null &&
+            message.isEphemeral() &&
+            message.isExpired()) {
+            mapImageView.setImageDrawable(new ColorDrawable(ColorUtils.injectAlpha(ThemeUtils.getEphemeralBackgroundAlpha(context),
+                                                                                   color)));
+            locationName.setTextColor(color);
+        }
+    }
+
+    private void messageExpired() {
+        imageAssetModelObserver.clear();
+        if (bitmapLoadHandle != null) {
+            bitmapLoadHandle.cancel();
+        }
+        mapImageView.setVisibility(View.VISIBLE);
+        pinImage.setVisibility(View.INVISIBLE);
+        pinView.setVisibility(View.INVISIBLE);
+        mapPlaceholderText.setVisibility(View.INVISIBLE);
+        int accent = messageViewsContainer.getControllerFactory().getAccentColorController().getColor();
+        mapImageView.setImageDrawable(new ColorDrawable(ColorUtils.injectAlpha(ThemeUtils.getEphemeralBackgroundAlpha(context),
+                                                                               accent)));
+        Typeface redactedTypeface = TypefaceUtils.getTypeface(TypefaceUtils.getRedactedTypedaceName());
+        locationName.setTypeface(redactedTypeface);
+        locationName.setTextColor(accent);
+        ephemeralTypeView.setVisibility(View.VISIBLE);
     }
 }

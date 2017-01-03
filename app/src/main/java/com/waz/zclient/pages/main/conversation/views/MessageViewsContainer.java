@@ -19,22 +19,25 @@ package com.waz.zclient.pages.main.conversation.views;
 
 import android.view.View;
 import com.waz.api.IConversation;
+import com.waz.api.Message;
 import com.waz.zclient.ServiceContainer;
-import com.waz.zclient.pages.main.conversation.views.row.message.views.TextMessageWithTimestamp;
+import com.waz.zclient.pages.main.conversation.views.row.message.MessageViewController;
 import com.waz.zclient.utils.OtrDestination;
 
-import java.util.Set;
-
 public interface MessageViewsContainer extends ServiceContainer {
-    Set<String> getTimestampShownSet();
-
     int getUnreadMessageCount();
 
     IConversation.Type getConversationType();
 
-    void setShownTimestampView(TextMessageWithTimestamp shownTimestampView);
+    void setExpandedMessageId(String messageId);
 
-    TextMessageWithTimestamp getShownTimestampView();
+    String getExpandedMessageId();
+
+    void setExpandedView(ExpandableView expandedView);
+
+    ExpandableView getExpandedView();
+
+    void closeMessageViewsExtras();
 
     boolean ping(boolean hotKnock, String id, String message, int color);
 
@@ -49,4 +52,6 @@ public interface MessageViewsContainer extends ServiceContainer {
     void openSettings();
 
     void openDevicesPage(OtrDestination otrDestination, View anchorView);
+
+    boolean onItemLongClick(Message message, MessageViewController messageViewController);
 }

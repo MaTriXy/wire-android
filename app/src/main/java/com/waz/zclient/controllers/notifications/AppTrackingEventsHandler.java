@@ -18,23 +18,29 @@
 package com.waz.zclient.controllers.notifications;
 
 
+import com.waz.api.EphemeralExpiration;
 import com.waz.api.ErrorResponse;
 import com.waz.api.IConversation;
+import com.waz.api.KindOfTrackingEvent;
 import com.waz.api.TrackingEvent;
 import com.waz.api.TrackingEventsHandler;
+import com.waz.service.HandlesTrackingService;
 import com.waz.service.call.AvsMetrics;
+import com.waz.service.push.PushTrackingService;
 import com.waz.zclient.controllers.tracking.ITrackingController;
 import com.waz.zclient.controllers.tracking.events.calling.EndedCallAVSMetricsEvent;
 import com.waz.zclient.core.controllers.tracking.attributes.CompletedMediaType;
-import com.waz.zclient.core.controllers.tracking.events.media.CompletedMediaActionEvent;
 import com.waz.zclient.core.controllers.tracking.events.filetransfer.CancelledFileUploadEvent;
 import com.waz.zclient.core.controllers.tracking.events.filetransfer.FailedFileDownloadEvent;
 import com.waz.zclient.core.controllers.tracking.events.filetransfer.FailedFileUploadEvent;
 import com.waz.zclient.core.controllers.tracking.events.filetransfer.InitiatedFileDownloadEvent;
 import com.waz.zclient.core.controllers.tracking.events.filetransfer.InitiatedFileUploadEvent;
-import com.waz.zclient.core.controllers.tracking.events.filetransfer.SuccessfullyUploadedFileEvent;
 import com.waz.zclient.core.controllers.tracking.events.filetransfer.SuccessfullyDownloadedFileEvent;
+import com.waz.zclient.core.controllers.tracking.events.filetransfer.SuccessfullyUploadedFileEvent;
+import com.waz.zclient.core.controllers.tracking.events.media.CompletedMediaActionEvent;
 import com.waz.zclient.core.controllers.tracking.events.media.SentPictureEvent;
+import com.waz.zclient.core.controllers.tracking.events.notifications.NotificationInformationEvent;
+import com.waz.zclient.core.controllers.tracking.events.onboarding.GeneratedUsernameEvent;
 import org.threeten.bp.Duration;
 import timber.log.Timber;
 
@@ -42,11 +48,18 @@ public class AppTrackingEventsHandler implements TrackingEventsHandler {
 
     private static final String UNDEFINED_ASSET_MIMETYPE = "";
     private static final int UNDEFINED_ASSET_SIZE = -1;
+    private static final String ASSET_MIME_TYPE_AUDIO = "audio";
+    private static final String ASSET_MIME_TYPE_VIDEO = "video";
 
     private ITrackingController trackingController;
 
     public AppTrackingEventsHandler(ITrackingController trackingController) {
         this.trackingController = trackingController;
+    }
+
+    @Override
+    public void onNotificationsEvent(PushTrackingService.NotificationsEvent ev) {
+        trackingController.tagEvent(new NotificationInformationEvent(ev));
     }
 
     @Override
@@ -59,19 +72,44 @@ public class AppTrackingEventsHandler implements TrackingEventsHandler {
             case ASSET_UPLOAD_STARTED:
                 String conversationType = trackingEvent.getConversationType().getOrElse(IConversation.Type.UNKNOWN).toString();
                 boolean withOtto = trackingEvent.isInConversationWithOtto().getOrElse(false);
-                trackingController.tagEvent(new InitiatedFileUploadEvent(assetMimeType, assetSize, conversationType));
-                trackingController.tagEvent(new CompletedMediaActionEvent(CompletedMediaType.FILE,
+                trackingController.tagEvent(new InitiatedFileUploadEvent(assetMimeType,
+                                                                         assetSize,
+                                                                         conversationType,
+                                                                         isEphemeral(trackingEvent),
+                                                                         getEphemeraDurationAsSec(trackingEvent)));
+                CompletedMediaType mediaType = CompletedMediaType.FILE;
+                if (assetMimeType.contains(ASSET_MIME_TYPE_AUDIO)) {
+                    mediaType = CompletedMediaType.AUDIO;
+                } else if (assetMimeType.contains(ASSET_MIME_TYPE_VIDEO)) {
+                    mediaType = CompletedMediaType.VIDEO;
+                }
+
+                trackingController.tagEvent(new CompletedMediaActionEvent(mediaType,
                                                                           conversationType,
-                                                                          withOtto));
+                                                                          withOtto,
+                                                                          isEphemeral(trackingEvent),
+                                                                          getEphemeraDurationAsSec(trackingEvent)));
                 break;
             case IMAGE_UPLOAD_AS_ASSET:
                 String type = trackingEvent.getConversationType().getOrElse(IConversation.Type.UNKNOWN).toString();
-                boolean isOtto = trackingEvent.isInConversationWithOtto().getOrElse(false);
-                trackingController.tagEvent(new InitiatedFileUploadEvent(assetMimeType, assetSize, type));
-                trackingController.tagEvent(new SentPictureEvent(SentPictureEvent.Source.CLIP, type));
+                boolean withBot = trackingEvent.isInConversationWithOtto().getOrElse(false);
+                trackingController.tagEvent(new InitiatedFileUploadEvent(assetMimeType,
+                                                                         assetSize,
+                                                                         type,
+                                                                         isEphemeral(trackingEvent),
+                                                                         getEphemeraDurationAsSec(trackingEvent)));
+
+                trackingController.tagEvent(new SentPictureEvent(SentPictureEvent.Source.CLIP, type,
+                                                                 SentPictureEvent.Method.DEFAULT,
+                                                                 SentPictureEvent.SketchSource.NONE,
+                                                                 withBot,
+                                                                 isEphemeral(trackingEvent),
+                                                                 getEphemeraDurationAsSec(trackingEvent)));
                 trackingController.tagEvent(new CompletedMediaActionEvent(CompletedMediaType.PHOTO,
                                                                           type,
-                                                                          isOtto));
+                                                                          withBot,
+                                                                          isEphemeral(trackingEvent),
+                                                                          getEphemeraDurationAsSec(trackingEvent)));
                 break;
             case ASSET_UPLOAD_SUCCESSFUL:
                 int durationInSeconds = (int) (trackingEvent.getDuration().getOrElse(Duration.ofSeconds(-1)).toMillis() / 1000);
@@ -100,6 +138,8 @@ public class AppTrackingEventsHandler implements TrackingEventsHandler {
                 trackingController.tagEvent(new FailedFileDownloadEvent(assetMimeType));
                 break;
         }
+
+
     }
 
     @Override
@@ -115,5 +155,29 @@ public class AppTrackingEventsHandler implements TrackingEventsHandler {
         }
         */
         trackingController.tagAVSMetricEvent(new EndedCallAVSMetricsEvent(avsMetrics));
+    }
+
+    @Override
+    public void onHandleValidation(HandlesTrackingService.HandlesValidationTrackingEvent event) {
+        trackingController.tagEvent(new GeneratedUsernameEvent(event.success()));
+    }
+
+    private boolean isEphemeral(TrackingEvent trackingEvent) {
+        if (trackingEvent.getKind() != KindOfTrackingEvent.ASSET_UPLOAD_STARTED &&
+            trackingEvent.getKind() != KindOfTrackingEvent.IMAGE_UPLOAD_AS_ASSET) {
+            return false;
+        }
+        return trackingEvent.getEphemeralExpiration() != EphemeralExpiration.NONE;
+    }
+
+    private String getEphemeraDurationAsSec(TrackingEvent trackingEvent) {
+        if (trackingEvent.getKind() != KindOfTrackingEvent.ASSET_UPLOAD_STARTED &&
+            trackingEvent.getKind() != KindOfTrackingEvent.IMAGE_UPLOAD_AS_ASSET) {
+            return "";
+        }
+        if (isEphemeral(trackingEvent)) {
+            return String.valueOf(trackingEvent.getEphemeralExpiration().duration().toSeconds());
+        }
+        return "";
     }
 }

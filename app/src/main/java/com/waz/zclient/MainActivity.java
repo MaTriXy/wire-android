@@ -17,14 +17,16 @@
  */
 package com.waz.zclient;
 
-import android.app.NotificationManager;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.support.annotation.NonNull;
@@ -42,23 +44,30 @@ import com.waz.api.CommonConnections;
 import com.waz.api.ConversationsList;
 import com.waz.api.IConversation;
 import com.waz.api.MessagesList;
+import com.waz.api.NetworkMode;
 import com.waz.api.Self;
 import com.waz.api.SyncState;
 import com.waz.api.User;
 import com.waz.api.Verification;
 import com.waz.api.VoiceChannel;
+import com.waz.model.ConvId;
+import com.waz.threading.Threading;
+import com.waz.zclient.calling.CallingActivity;
+import com.waz.zclient.calling.controllers.CallPermissionsController;
 import com.waz.zclient.controllers.accentcolor.AccentColorChangeRequester;
 import com.waz.zclient.controllers.accentcolor.AccentColorObserver;
 import com.waz.zclient.controllers.calling.CallingObserver;
 import com.waz.zclient.controllers.navigation.NavigationControllerObserver;
 import com.waz.zclient.controllers.navigation.Page;
-import com.waz.zclient.controllers.notifications.NotificationsController;
 import com.waz.zclient.controllers.tracking.events.connect.AcceptedGenericInviteEvent;
 import com.waz.zclient.controllers.tracking.events.exception.ExceptionEvent;
 import com.waz.zclient.controllers.tracking.events.otr.VerifiedConversationEvent;
 import com.waz.zclient.controllers.tracking.events.profile.SignOut;
 import com.waz.zclient.controllers.tracking.screens.ApplicationScreen;
+import com.waz.zclient.controllers.userpreferences.IUserPreferencesController;
+import com.waz.zclient.controllers.userpreferences.UserPreferencesController;
 import com.waz.zclient.core.api.scala.AppEntryStore;
+import com.waz.zclient.core.controllers.tracking.attributes.OpenedMediaAction;
 import com.waz.zclient.core.controllers.tracking.attributes.RangedAttribute;
 import com.waz.zclient.core.controllers.tracking.events.Event;
 import com.waz.zclient.core.controllers.tracking.events.media.OpenedMediaActionEvent;
@@ -68,6 +77,7 @@ import com.waz.zclient.core.stores.connect.ConnectStoreObserver;
 import com.waz.zclient.core.stores.connect.IConnectStore;
 import com.waz.zclient.core.stores.conversation.ConversationChangeRequester;
 import com.waz.zclient.core.stores.conversation.ConversationStoreObserver;
+import com.waz.zclient.core.stores.network.NetworkAction;
 import com.waz.zclient.core.stores.profile.ProfileStoreObserver;
 import com.waz.zclient.pages.main.MainPhoneFragment;
 import com.waz.zclient.pages.main.MainTabletFragment;
@@ -76,14 +86,20 @@ import com.waz.zclient.pages.main.grid.GridFragment;
 import com.waz.zclient.pages.main.profile.ZetaPreferencesActivity;
 import com.waz.zclient.pages.startup.UpdateFragment;
 import com.waz.zclient.utils.BuildConfigUtils;
+import com.waz.zclient.utils.Emojis;
 import com.waz.zclient.utils.HockeyCrashReporting;
 import com.waz.zclient.utils.IntentUtils;
 import com.waz.zclient.utils.LayoutSpec;
 import com.waz.zclient.utils.PhoneUtils;
 import com.waz.zclient.utils.PhoneUtils.PhoneState;
+import com.waz.zclient.utils.StringUtils;
 import com.waz.zclient.utils.ViewUtils;
+import net.hockeyapp.android.NativeCrashManager;
 import timber.log.Timber;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 
@@ -200,11 +216,22 @@ public class MainActivity extends BaseActivity implements MainPhoneFragment.Cont
         getControllerFactory().getNavigationController().addNavigationControllerObserver(this);
         getControllerFactory().getCallingController().addCallingObserver(this);
         getStoreFactory().getConversationStore().addConversationStoreObserver(this);
-        dismissAndroidNotifications();
         handleInvite();
         handleReferral();
 
         super.onStart();
+
+        //This is needed to drag the user back to the calling activity if they open the app again during a call
+        CallingActivity.startIfCallIsActive(this);
+
+        if (!getControllerFactory().getUserPreferencesController().hasCheckedForUnsupportedEmojis(Emojis.VERSION)) {
+            Threading.Background().execute(new Runnable() {
+                @Override
+                public void run() {
+                    checkForUnsupportedEmojis();
+                }
+            });
+        }
     }
 
     @Override
@@ -212,9 +239,17 @@ public class MainActivity extends BaseActivity implements MainPhoneFragment.Cont
         Timber.i("onResume");
         super.onResume();
         verifyGooglePlayServicesStatus();
-        HockeyCrashReporting.checkForCrashes(getApplicationContext(),
-                                             getControllerFactory().getUserPreferencesController().getDeviceId(),
-                                             getControllerFactory().getTrackingController());
+        final boolean trackingEnabled = getSharedPreferences(UserPreferencesController.USER_PREFS_TAG, Context.MODE_PRIVATE)
+            .getBoolean(getString(R.string.pref_advanced_analytics_enabled_key), true);
+
+        if (trackingEnabled) {
+            HockeyCrashReporting.checkForCrashes(getApplicationContext(),
+                                                 getControllerFactory().getUserPreferencesController().getDeviceId(),
+                                                 getControllerFactory().getTrackingController());
+        } else {
+            HockeyCrashReporting.deleteCrashReports(getApplicationContext());
+            NativeCrashManager.deleteDumpFiles(getApplicationContext());
+        }
         getControllerFactory().getTrackingController().appResumed();
         Localytics.setInAppMessageDisplayActivity(this);
         Localytics.handleTestMode(getIntent());
@@ -355,20 +390,17 @@ public class MainActivity extends BaseActivity implements MainPhoneFragment.Cont
         getControllerFactory().getNavigationController().setIsLandscape(ViewUtils.isInLandscape(this));
     }
 
-    private void dismissAndroidNotifications() {
-        ((NotificationManager) getApplicationContext().getSystemService(NOTIFICATION_SERVICE)).cancel(
-            NotificationsController.ZETA_MESSAGE_NOTIFICATION_ID);
-    }
-
     private void verifyGooglePlayServicesStatus() {
         int deviceGooglePlayServicesState = GooglePlayServicesUtil.isGooglePlayServicesAvailable(getApplicationContext());
-        if (deviceGooglePlayServicesState == ConnectionResult.SERVICE_MISSING ||
-            deviceGooglePlayServicesState == ConnectionResult.SERVICE_VERSION_UPDATE_REQUIRED ||
-            deviceGooglePlayServicesState == ConnectionResult.SERVICE_DISABLED) {
+        Boolean errorShown = getControllerFactory().getUserPreferencesController().hasPlayServicesErrorShown();
+        if (deviceGooglePlayServicesState == ConnectionResult.SERVICE_VERSION_UPDATE_REQUIRED && !errorShown) {
             GooglePlayServicesUtil.getErrorDialog(deviceGooglePlayServicesState,
                                                   this,
                                                   REQUEST_CODE_GOOGLE_PLAY_SERVICES_DIALOG)
                                   .show();
+            getControllerFactory().getUserPreferencesController().setPlayServicesErrorShown(true);
+        } else if (deviceGooglePlayServicesState == ConnectionResult.SUCCESS) {
+            getControllerFactory().getUserPreferencesController().setPlayServicesErrorShown(false);
         }
     }
 
@@ -426,6 +458,7 @@ public class MainActivity extends BaseActivity implements MainPhoneFragment.Cont
         getStoreFactory().getProfileStore().setUser(self);
         getControllerFactory().getAccentColorController().setColor(AccentColorChangeRequester.LOGIN,
                                                                    self.getAccent().getColor());
+        getControllerFactory().getUsernameController().setUser(self);
 
         final Intent intent = getIntent();
         if (IntentUtils.isLaunchFromNotificationIntent(intent)) {
@@ -465,6 +498,7 @@ public class MainActivity extends BaseActivity implements MainPhoneFragment.Cont
             }
             IntentUtils.clearLaunchIntentExtra(intent);
         }
+
         setIntent(intent);
         openMainPage();
     }
@@ -662,7 +696,15 @@ public class MainActivity extends BaseActivity implements MainPhoneFragment.Cont
     public void onMessagesUpdated(MessagesList messagesList) {}
 
     @Override
-    public void onConnectUserUpdated(User user, IConnectStore.UserRequester usertype) {}
+    public void onConnectUserUpdated(User user, IConnectStore.UserRequester usertype) {
+        IConversation currentConverstation  = getStoreFactory().getConversationStore().getCurrentConversation();
+        if (currentConverstation != null &&
+            currentConverstation.getType() == IConversation.Type.WAIT_FOR_CONNECTION &&
+            currentConverstation.getOtherParticipant().getId().equals(user.getId()) &&
+            user.getConnectionStatus() == User.ConnectionStatus.CANCELLED) {
+            getStoreFactory().getConversationStore().setCurrentConversationToNext(ConversationChangeRequester.CONNECT_REQUEST_CANCELLED);
+        }
+    }
 
     @Override
     public void onCommonConnectionsUpdated(CommonConnections commonConnections) {}
@@ -713,6 +755,7 @@ public class MainActivity extends BaseActivity implements MainPhoneFragment.Cont
         getControllerFactory().getTrackingController().tagEvent(new SignOut());
         getControllerFactory().getTrackingController().tagEvent(new LoggedOutEvent());
         getStoreFactory().getZMessagingApiStore().logout();
+        getControllerFactory().getUsernameController().logout();
     }
 
     @Override
@@ -740,44 +783,21 @@ public class MainActivity extends BaseActivity implements MainPhoneFragment.Cont
     @Override
     public void onStartCall(boolean withVideo) {
         handleOnStartCall(withVideo);
-        boolean isGroupConversation = getStoreFactory().getConversationStore().getCurrentConversation().getType() == IConversation.Type.GROUP;
+        IConversation conversation = getStoreFactory().getConversationStore().getCurrentConversation();
         if (withVideo) {
-            getControllerFactory().getTrackingController().tagEvent(OpenedMediaActionEvent.videocall(isGroupConversation));
+            getControllerFactory().getTrackingController().tagEvent(OpenedMediaActionEvent.cursorAction(OpenedMediaAction.VIDEO_CALL, conversation));
         } else {
-            getControllerFactory().getTrackingController().tagEvent(OpenedMediaActionEvent.audiocall(isGroupConversation));
+            getControllerFactory().getTrackingController().tagEvent(OpenedMediaActionEvent.cursorAction(OpenedMediaAction.AUDIO_CALL, conversation));
         }
     }
 
     private void handleOnStartCall(final boolean withVideo) {
-
-        if (!getStoreFactory().getNetworkStore().hasInternetConnection()) {
-            cannotStartNoInternet();
-        } else if (PhoneUtils.getPhoneState(this) == PhoneState.IDLE && getActiveVoiceChannels().hasOngoingCall()) {
+        if (PhoneUtils.getPhoneState(this) == PhoneState.IDLE && getActiveVoiceChannels().hasOngoingCall()) {
             cannotStartAlreadyHaveVoiceActive(withVideo);
         } else if (PhoneUtils.getPhoneState(this) != PhoneState.IDLE) {
             cannotStartGSM();
-        } else if (withVideo && !getStoreFactory().getNetworkStore().hasInternetConnectionWith3GAndHigher()) {
-            // Show alert about slow connection but still allow user to place a video call
-            ViewUtils.showAlertDialog(this,
-                                      R.string.calling__slow_connection__title,
-                                      R.string.calling__video_call__slow_connection__message,
-                                      R.string.calling__slow_connection__button,
-                                      new DialogInterface.OnClickListener() {
-                                          @Override
-                                          public void onClick(DialogInterface dialogInterface, int i) {
-                                              startCall(true);
-                                          }
-                                      },
-                                      true);
-        } else if (!getStoreFactory().getNetworkStore().hasInternetConnectionWith2GAndHigher()) {
-            ViewUtils.showAlertDialog(this,
-                                      R.string.calling__slow_connection__title,
-                                      R.string.calling__slow_connection__message,
-                                      R.string.calling__slow_connection__button,
-                                      null,
-                                      true);
         } else {
-            startCall(withVideo);
+            startCallIfInternet(withVideo);
         }
     }
 
@@ -800,7 +820,7 @@ public class MainActivity extends BaseActivity implements MainPhoneFragment.Cont
                                       true);
             return;
         }
-        startCall(voiceChannel.getConversation().getId(), withVideo);
+        injectJava(CallPermissionsController.class).startCall(new ConvId(voiceChannel.getConversation().getId()), withVideo);
     }
 
 
@@ -855,17 +875,55 @@ public class MainActivity extends BaseActivity implements MainPhoneFragment.Cont
                                   true);
     }
 
-    private void cannotStartNoInternet() {
-        getStoreFactory().getNetworkStore().notifyNetworkAccessFailed();
-        ViewUtils.showAlertDialog(this,
-                                  R.string.alert_dialog__no_network__header,
-                                  R.string.calling__call_drop__message,
-                                  R.string.alert_dialog__confirmation,
-                                  new DialogInterface.OnClickListener() {
-                                      @Override
-                                      public void onClick(DialogInterface dialog, int which) {
-                                      }
-                                  }, false);
+    private void startCallIfInternet(final boolean withVideo) {
+        getStoreFactory().getNetworkStore().doIfHasInternetOrNotifyUser(new NetworkAction() {
+            @Override
+            public void execute(NetworkMode networkMode) {
+                switch (networkMode) {
+                    case _2G:
+                        ViewUtils.showAlertDialog(MainActivity.this,
+                                                  R.string.calling__slow_connection__title,
+                                                  R.string.calling__slow_connection__message,
+                                                  R.string.calling__slow_connection__button,
+                                                  null,
+                                                  true);
+                        break;
+                    case EDGE:
+                        if (withVideo) {
+                            ViewUtils.showAlertDialog(MainActivity.this,
+                                                      R.string.calling__slow_connection__title,
+                                                      R.string.calling__video_call__slow_connection__message,
+                                                      R.string.calling__slow_connection__button,
+                                                      new DialogInterface.OnClickListener() {
+                                                          @Override
+                                                          public void onClick(DialogInterface dialogInterface, int i) {
+                                                              startCall(true);
+                                                          }
+                                                      },
+                                                      true);
+                            break;
+                        }
+                    case _3G:
+                    case _4G:
+                    case WIFI:
+                        startCall(withVideo);
+                        break;
+                }
+            }
+
+            @Override
+            public void onNoNetwork() {
+                ViewUtils.showAlertDialog(MainActivity.this,
+                                          R.string.alert_dialog__no_network__header,
+                                          R.string.calling__call_drop__message,
+                                          R.string.alert_dialog__confirmation,
+                                          new DialogInterface.OnClickListener() {
+                                              @Override
+                                              public void onClick(DialogInterface dialog, int which) {
+                                              }
+                                          }, false);
+            }
+        });
     }
 
     @Override
@@ -905,5 +963,37 @@ public class MainActivity extends BaseActivity implements MainPhoneFragment.Cont
         if (previousVerification != Verification.VERIFIED && currentVerification == Verification.VERIFIED) {
             getControllerFactory().getTrackingController().tagEvent(new VerifiedConversationEvent());
         }
+    }
+
+    private void checkForUnsupportedEmojis() {
+        if (getControllerFactory() == null ||
+            getControllerFactory().isTornDown()) {
+            return;
+        }
+        IUserPreferencesController userPreferencesController = getControllerFactory().getUserPreferencesController();
+        Collection<String> unsupported = new ArrayList<>();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Paint paint = new Paint();
+            for (String[] array : Emojis.getAllEmojisSortedByCategory()) {
+                for (String emoji : array) {
+                    if (!paint.hasGlyph(emoji)) {
+                        unsupported.add(emoji);
+                    }
+                }
+            }
+        } else {
+            for (String[] array : Emojis.getAllEmojisSortedByCategory()) {
+                unsupported.addAll(Arrays.asList(array));
+            }
+            unsupported = StringUtils.getMissingInFont(unsupported);
+        }
+        if (!unsupported.isEmpty()) {
+            userPreferencesController.setUnsupportedEmoji(unsupported, Emojis.VERSION);
+        }
+    }
+
+    @Override
+    public void onMyUsernameHasChanged(String myUsername) {
+
     }
 }

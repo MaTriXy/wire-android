@@ -37,11 +37,11 @@ import com.waz.api.Logging;
 import com.waz.api.LoginListener;
 import com.waz.api.PermissionProvider;
 import com.waz.api.Search;
-import com.waz.api.SearchQuery;
 import com.waz.api.Self;
 import com.waz.api.Spotify;
 import com.waz.api.TrackingData;
 import com.waz.api.User;
+import com.waz.api.Usernames;
 import com.waz.api.ZCache;
 import com.waz.api.ZMessagingApi;
 import com.waz.media.manager.MediaManager;
@@ -147,11 +147,6 @@ public class StubZMessagingApiStore implements IZMessagingApiStore {
             }
 
             @Override
-            public SearchQuery searchQuery() {
-                return null;
-            }
-
-            @Override
             public Search search() {
                 return null;
             }
@@ -240,6 +235,11 @@ public class StubZMessagingApiStore implements IZMessagingApiStore {
             public ConnectionIndicator getConnectionIndicator() {
                 return null;
             }
+
+            @Override
+            public Usernames getUsernames() {
+                return null;
+            }
         };
     }
 
@@ -255,7 +255,7 @@ public class StubZMessagingApiStore implements IZMessagingApiStore {
 
     @Override
     public void delete() {
-        
+
     }
 
     @Override

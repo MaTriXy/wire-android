@@ -1,4 +1,3 @@
-apply plugin: 'android-sdk-manager'
 apply plugin: 'com.android.application'
 apply plugin: 'jp.leafytree.android-scala'
 apply plugin: 'android-apt'
@@ -48,7 +47,7 @@ android {
             // All the usual Gradle options.
             testLogging {
                 events "passed", "skipped", "failed", "standardOut", "standardError"
-                outputs.upToDateWhen {false}
+                outputs.upToDateWhen { false }
                 showStandardStreams = true
             }
         }
@@ -102,19 +101,17 @@ android {
                                     hockeyAppKey           : getApiKey("hockeyAppKey")]
 
             buildConfigField 'boolean', 'USE_HOCKEY_UPDATE', 'true'
-            buildConfigField 'boolean', 'USE_EDGE_BACKEND', 'true'
-            buildConfigField 'boolean', 'USE_STAGING_BACKEND', 'false'
+            buildConfigField 'boolean', 'USE_STAGING_BACKEND', 'true'
             buildConfigField 'boolean', 'SHOW_GRIDOVERLAY', 'true'
             buildConfigField 'boolean', 'SHOW_DEVELOPER_OPTIONS', 'true'
             buildConfigField 'boolean', 'IS_LOADTIME_LOGGER_ENABLED', 'true'
             buildConfigField 'boolean', 'SHOW_TEST_COUNTRY_CODE', 'true'
             buildConfigField 'boolean', 'SHOW_MENTIONING', 'true'
-            buildConfigField 'boolean', 'IS_TEST_GALLERY_ALLOWED', 'true'
+            buildConfigField 'boolean', 'IS_TEST_GALLERY_ALLOWED', 'false'
+            buildConfigField 'boolean', 'SHOW_BACKEND_PICKER', 'true'
             buildConfigField 'int', 'LOG_LEVEL_UI', logLevelWarn()
             buildConfigField 'int', 'LOG_LEVEL_SE', logLevelSupress()
             buildConfigField 'int', 'LOG_LEVEL_AVS', logLevelVerbose()
-
-            patchKeepSpecs()
         }
 
         candidate {
@@ -130,7 +127,6 @@ android {
                                     hockeyAppKey           : getApiKey("hockeyAppKeyCand")]
 
             buildConfigField 'boolean', 'USE_HOCKEY_UPDATE', 'true'
-            buildConfigField 'boolean', 'USE_EDGE_BACKEND', 'false'
             buildConfigField 'boolean', 'USE_STAGING_BACKEND', 'true'
             buildConfigField 'boolean', 'SHOW_GRIDOVERLAY', 'true'
             buildConfigField 'boolean', 'SHOW_DEVELOPER_OPTIONS', 'true'
@@ -139,6 +135,7 @@ android {
             buildConfigField 'boolean', 'SHOW_MENTIONING', 'false'
             buildConfigField 'boolean', 'SHOW_ADDRESS_BOOK_INVITATIONS', 'false'
             buildConfigField 'boolean', 'IS_TEST_GALLERY_ALLOWED', 'true'
+            buildConfigField 'boolean', 'SHOW_BACKEND_PICKER', 'true'
             buildConfigField 'int', 'LOG_LEVEL_UI', logLevelVerbose()
             buildConfigField 'int', 'LOG_LEVEL_SE', logLevelVerbose()
             buildConfigField 'int', 'LOG_LEVEL_AVS', logLevelVerbose()
@@ -156,7 +153,6 @@ android {
                                     hockeyAppKey           : getApiKey("hockeyAppKeyProd")]
 
             buildConfigField 'boolean', 'USE_HOCKEY_UPDATE', 'false'
-            buildConfigField 'boolean', 'USE_EDGE_BACKEND', 'false'
             buildConfigField 'boolean', 'USE_STAGING_BACKEND', 'false'
             buildConfigField 'boolean', 'SHOW_GRIDOVERLAY', 'false'
             buildConfigField 'boolean', 'SHOW_DEVELOPER_OPTIONS', 'false'
@@ -164,6 +160,7 @@ android {
             buildConfigField 'boolean', 'SHOW_TEST_COUNTRY_CODE', 'false'
             buildConfigField 'boolean', 'SHOW_MENTIONING', 'false'
             buildConfigField 'boolean', 'IS_TEST_GALLERY_ALLOWED', 'false'
+            buildConfigField 'boolean', 'SHOW_BACKEND_PICKER', 'false'
             buildConfigField 'int', 'LOG_LEVEL_UI', logLevelSupress()
             buildConfigField 'int', 'LOG_LEVEL_SE', logLevelSupress()
             buildConfigField 'int', 'LOG_LEVEL_AVS', logLevelSupress()
@@ -172,26 +169,26 @@ android {
         internal {
             applicationId "com.wire.internal"
             versionName majorVersion + android.defaultConfig.versionCode + "-internal"
-            proguardFile 'proguard-rules-test.txt'
-            manifestPlaceholders = [applicationLabel       : "Wire Internal",
-                                    allowBackup            : "true",
-                                    applicationIcon        : "@drawable/ic_launcher_wire_internal",
-                                    sharedUserId           : "",
-                                    use_audio_link         : "false",
-                                    internal_features      : "true",
-                                    localyticsAppKey       : getApiKey("localyticsAppKey"),
-                                    hockeyAppKey           : getApiKey("hockeyAppKeyInternal")]
+            manifestPlaceholders = [applicationLabel : "Wire Internal",
+                                    allowBackup      : "true",
+                                    applicationIcon  : "@drawable/ic_launcher_wire_internal",
+                                    sharedUserId     : "",
+                                    use_audio_link   : "false",
+                                    gcm_enabled      : "false",
+                                    internal_features: "true",
+                                    localyticsAppKey : getApiKey("localyticsAppKey"),
+                                    hockeyAppKey     : getApiKey("hockeyAppKeyInternal")]
 
             buildConfigField 'boolean', 'USE_HOCKEY_UPDATE', 'false'
-            buildConfigField 'boolean', 'USE_EDGE_BACKEND', 'false'
             buildConfigField 'boolean', 'USE_STAGING_BACKEND', 'false'
-            buildConfigField 'boolean', 'SHOW_GRIDOVERLAY', 'true'
+            buildConfigField 'boolean', 'SHOW_GRIDOVERLAY', 'false'
             buildConfigField 'boolean', 'SHOW_DEVELOPER_OPTIONS', 'true'
             buildConfigField 'boolean', 'IS_LOADTIME_LOGGER_ENABLED', 'false'
             buildConfigField 'boolean', 'SHOW_TEST_COUNTRY_CODE', 'false'
             buildConfigField 'boolean', 'SHOW_MENTIONING', 'false'
             buildConfigField 'boolean', 'SHOW_ADDRESS_BOOK_INVITATIONS', 'false'
             buildConfigField 'boolean', 'IS_TEST_GALLERY_ALLOWED', 'false'
+            buildConfigField 'boolean', 'SHOW_BACKEND_PICKER', 'false'
             buildConfigField 'int', 'LOG_LEVEL_UI', logLevelVerbose()
             buildConfigField 'int', 'LOG_LEVEL_SE', logLevelVerbose()
             buildConfigField 'int', 'LOG_LEVEL_AVS', logLevelVerbose()
@@ -200,7 +197,6 @@ android {
         avs {
             applicationId "com.wire.avs"
             versionName majorVersion + android.defaultConfig.versionCode + "-avs"
-            proguardFile 'proguard-rules-test.txt'
             manifestPlaceholders = [applicationLabel       : "Wire AVS",
                                     allowBackup            : "true",
                                     applicationIcon        : "@drawable/ic_launcher_wire_playground",
@@ -211,7 +207,6 @@ android {
                                     hockeyAppKey           : getApiKey("hockeyAppKeyAvs")]
 
             buildConfigField 'boolean', 'USE_HOCKEY_UPDATE', 'true'
-            buildConfigField 'boolean', 'USE_EDGE_BACKEND', 'false'
             buildConfigField 'boolean', 'USE_STAGING_BACKEND', 'false'
             buildConfigField 'boolean', 'SHOW_GRIDOVERLAY', 'true'
             buildConfigField 'boolean', 'SHOW_DEVELOPER_OPTIONS', 'true'
@@ -219,6 +214,7 @@ android {
             buildConfigField 'boolean', 'SHOW_TEST_COUNTRY_CODE', 'false'
             buildConfigField 'boolean', 'SHOW_MENTIONING', 'false'
             buildConfigField 'boolean', 'IS_TEST_GALLERY_ALLOWED', 'false'
+            buildConfigField 'boolean', 'SHOW_BACKEND_PICKER', 'true'
             buildConfigField 'int', 'LOG_LEVEL_UI', logLevelSupress()
             buildConfigField 'int', 'LOG_LEVEL_SE', logLevelVerbose()
             buildConfigField 'int', 'LOG_LEVEL_AVS', logLevelVerbose()
@@ -227,7 +223,6 @@ android {
         qaavs {
             applicationId "com.wire.qaavs"
             versionName majorVersion + android.defaultConfig.versionCode + "-qaavs"
-            proguardFile 'proguard-rules-test.txt'
             manifestPlaceholders = [applicationLabel       : "Wire QA AVS",
                                     allowBackup            : "true",
                                     applicationIcon        : "@drawable/ic_launcher_wire_playground",
@@ -238,7 +233,6 @@ android {
                                     hockeyAppKey           : getApiKey("hockeyAppKeyQaavs")]
 
             buildConfigField 'boolean', 'USE_HOCKEY_UPDATE', 'true'
-            buildConfigField 'boolean', 'USE_EDGE_BACKEND', 'false'
             buildConfigField 'boolean', 'USE_STAGING_BACKEND', 'false'
             buildConfigField 'boolean', 'SHOW_GRIDOVERLAY', 'true'
             buildConfigField 'boolean', 'SHOW_DEVELOPER_OPTIONS', 'true'
@@ -247,6 +241,7 @@ android {
             buildConfigField 'boolean', 'SHOW_MENTIONING', 'false'
             buildConfigField 'boolean', 'SHOW_ADDRESS_BOOK_INVITATIONS', 'false'
             buildConfigField 'boolean', 'IS_TEST_GALLERY_ALLOWED', 'true'
+            buildConfigField 'boolean', 'SHOW_BACKEND_PICKER', 'true'
             buildConfigField 'int', 'LOG_LEVEL_UI', logLevelSupress()
             buildConfigField 'int', 'LOG_LEVEL_SE', logLevelVerbose()
             buildConfigField 'int', 'LOG_LEVEL_AVS', logLevelVerbose()
@@ -255,7 +250,6 @@ android {
         experimental {
             applicationId "com.wire.x"
             versionName majorVersion + android.defaultConfig.versionCode + "-exp"
-            proguardFile 'proguard-rules-test.txt'
             manifestPlaceholders = [applicationLabel       : "Wire Exp",
                                     allowBackup            : "true",
                                     applicationIcon        : "@drawable/ic_launcher_wire_playground",
@@ -266,7 +260,6 @@ android {
                                     hockeyAppKey           : getApiKey("hockeyAppKeyExperimental")]
 
             buildConfigField 'boolean', 'USE_HOCKEY_UPDATE', 'true'
-            buildConfigField 'boolean', 'USE_EDGE_BACKEND', 'false'
             buildConfigField 'boolean', 'USE_STAGING_BACKEND', 'false'
             buildConfigField 'boolean', 'SHOW_GRIDOVERLAY', 'true'
             buildConfigField 'boolean', 'SHOW_DEVELOPER_OPTIONS', 'true'
@@ -274,11 +267,10 @@ android {
             buildConfigField 'boolean', 'SHOW_TEST_COUNTRY_CODE', 'true'
             buildConfigField 'boolean', 'SHOW_MENTIONING', 'true'
             buildConfigField 'boolean', 'IS_TEST_GALLERY_ALLOWED', 'true'
+            buildConfigField 'boolean', 'SHOW_BACKEND_PICKER', 'true'
             buildConfigField 'int', 'LOG_LEVEL_UI', logLevelVerbose()
             buildConfigField 'int', 'LOG_LEVEL_SE', logLevelVerbose()
             buildConfigField 'int', 'LOG_LEVEL_AVS', logLevelVerbose()
-
-            patchKeepSpecs()
         }
     }
 
@@ -306,82 +298,11 @@ android {
     }
 }
 
-def patchKeepSpecs() {
-    def taskClass = "com.android.build.gradle.internal.tasks.multidex.CreateManifestKeepList";
-    def clazz = this.class.classLoader.loadClass(taskClass)
-    def keepSpecsField = clazz.getDeclaredField("KEEP_SPECS")
-    keepSpecsField.setAccessible(true)
-    def keepSpecsMap = (Map) keepSpecsField.get(null)
-    if (keepSpecsMap.remove("activity") != null) {
-        println "KEEP_SPECS patched: removed 'activity' root"
-    } else {
-        println "Failed to patch KEEP_SPECS: no 'activity' root found"
-    }
-
-    if (keepSpecsMap.remove("instrumentation") != null) {
-        println "KEEP_SPECS patched: removed 'instrumentation' root"
-    } else {
-        println "Failed to patch KEEP_SPECS: no 'instrumentation' root found"
-    }
-
-    if (keepSpecsMap.remove("service") != null) {
-        println "KEEP_SPECS patched: removed 'service' root"
-    } else {
-        println "Failed to patch KEEP_SPECS: no 'service' root found"
-    }
-
-
-
-
-}
-
-afterEvaluate {
-    //Pretty big hack to keep the main dex class list down
-    Task collectTask = project.tasks.findByName("collectDevDebugMultiDexComponents")
-    Task processManifestTask = project.tasks.findByName("processDevDebugManifest")
-
-    if (!collectTask || !processManifestTask)
-        return
-
-    collectTask.dependsOn(processManifestTask) << {
-        File androidManifestFile = processManifestTask.outputs.files.filter {
-            it.absolutePath.matches('.*full.*AndroidManifest\\.xml')
-        }.singleFile
-
-        File manifestKeepFile = collectTask.outputs.files.filter {
-            it.absolutePath.endsWith('manifest_keep.txt')
-        }.singleFile
-
-        def nonExportedClasses = new XmlSlurper().parse(androidManifestFile).application.'**'.findAll { node ->
-            if (node.name().matches('(activity|service|receiver|provider)')) {
-                return (node.'@android:exported' == 'false'
-                        || (node.'@android:exported' != 'true'
-                        && node.'intent-filter'.size() == 0))
-            }
-        }.collect {
-            it.'@android:name'.text()
-        }
-
-        def manifestKeepText = manifestKeepFile.text
-        manifestKeepFile.withWriter('utf-8') { writer ->
-            manifestKeepText.eachLine { line ->
-                boolean isNonExportedLine = nonExportedClasses.any {
-                    line.contains(it)
-                }
-
-                if (!isNonExportedLine)
-                    writer.writeLine(line)
-            }
-        }
-    }
-}
-
 dexinfo {
     maxDepth 2
 }
 
 dependencies {
-    apt project(':annotations-processor')
     compile project(':wire-core')
     compile project(':wire-ui')
     compile project(':lintlib')
@@ -405,17 +326,13 @@ dependencies {
     // For spotify
     compile deps.spotifyAuth
 
-    // For Video Message preview
-    compile deps.mp4parser
-
     //noinspection GradleDynamicVersion
     compile deps.psBase
     compile deps.psGcm
     compile deps.psMaps
     compile deps.psLocation
     compile deps.cardview
-    //Used for animating incoming messages
-    compile deps.nineoldandroids
+
     // For using local files in app/libs
     //compile (name:'avs', ext:'aar')
     //compile (name:'audio-notifications', ext:'aar')
@@ -466,7 +383,7 @@ def getDate() {
     return formattedDate
 }
 
-def getApiKey(String property){
+def getApiKey(String property) {
     if (file("$projectDir/api-keys.properties").exists()) {
         Properties properties = new Properties()
         properties.load(new FileInputStream("$projectDir/api-keys.properties"))
@@ -481,8 +398,13 @@ def getApiKey(String property){
 // Same values as in log_levels.xml
 // (workaround for R not being available in BuildConfig for test flavor)
 def logLevelVerbose() { return '2' }
+
 def logLevelDebug() { return '3' }
+
 def logLevelInfo() { return '4' }
+
 def logLevelWarn() { return '5' }
+
 def logLevelError() { return '6' }
+
 def logLevelSupress() { return '99' }

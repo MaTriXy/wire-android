@@ -39,6 +39,7 @@ import com.waz.zclient.ui.text.TypefaceTextView;
 import com.waz.zclient.ui.utils.ResourceUtils;
 import com.waz.zclient.ui.views.ZetaButton;
 import com.waz.zclient.utils.ViewUtils;
+import com.waz.zclient.ui.views.OnDoubleClickListener;
 import com.waz.zclient.views.ProgressView;
 import com.waz.zclient.views.images.CircularSeekBar;
 
@@ -69,8 +70,7 @@ public class MediaPlayerView extends FrameLayout implements CircularSeekBar.OnCi
     public MediaPlayerView(final Context context, AttributeSet attrs, int defStyle) {
         super(context, attrs, defStyle);
 
-        LayoutInflater inflater = LayoutInflater.from(context);
-        View view = inflater.inflate(R.layout.media_player_layout, this, true);
+        View view = LayoutInflater.from(context).inflate(R.layout.media_player_layout, this, true);
 
         musicTrackIndicator = ViewUtils.getView(view, R.id.gtv__media_music_indicator);
         loadingIndicatorProgressView = ViewUtils.getView(view, R.id.pb__media_loading_indicator);
@@ -95,9 +95,16 @@ public class MediaPlayerView extends FrameLayout implements CircularSeekBar.OnCi
         progressSeekBar = ViewUtils.getView(view, R.id.sb__media_progress);
         progressSeekBar.setOnSeekBarChangeListener(this);
         progressSeekBar.setProgressEnabled(false);
-        progressSeekBar.setOnArtClickListener(new OnClickListener() {
+        progressSeekBar.setOnArtClickListener(new OnDoubleClickListener() {
             @Override
-            public void onClick(View v) {
+            public void onDoubleClick() {
+                if (mediaPlayerListener != null) {
+                    mediaPlayerListener.onPlaceholderDoubleTap();
+                }
+            }
+
+            @Override
+            public void onSingleClick() {
                 if (mediaPlayerListener != null) {
                     mediaPlayerListener.onPlaceholderTap();
                 }
@@ -266,6 +273,8 @@ public class MediaPlayerView extends FrameLayout implements CircularSeekBar.OnCi
         void onOpenExternalClicked();
 
         void onPlaceholderTap();
+
+        void onPlaceholderDoubleTap();
 
         boolean onHintClicked();
     }

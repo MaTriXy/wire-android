@@ -21,9 +21,11 @@ import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
 import android.view.View;
 import com.waz.zclient.R;
+import com.waz.zclient.ui.utils.ColorUtils;
 
 public class ProgressDotsView extends View {
 
@@ -35,9 +37,14 @@ public class ProgressDotsView extends View {
     private final int dotSpacing;
     private final int dotRadius;
 
+    private boolean expired;
+
     //seems as though the animator never actually reaches the last value you set, so we go to 3 instead of just to 2
     private final ValueAnimator animator = ValueAnimator.ofInt(0, 1, 2, 3).setDuration(ANIMATION_DURATION);
     private int darkDotIndex = 0;
+    private int accentColor;
+
+    private final Drawable defaultBackground;
 
 
     public ProgressDotsView(Context context) {
@@ -64,6 +71,7 @@ public class ProgressDotsView extends View {
                 invalidate();
             }
         });
+        defaultBackground = getBackground();
     }
 
     @Override
@@ -78,8 +86,26 @@ public class ProgressDotsView extends View {
         animator.cancel();
     }
 
+    public void setExpired(boolean expired) {
+        this.expired = expired;
+        if (expired) {
+            setBackground(ColorUtils.getTintedDrawable(getContext(), R.drawable.shape_audio_message_background_expired, accentColor));
+        } else {
+            setBackground(defaultBackground);
+        }
+        invalidate();
+    }
+
+    public void setAccentColor(int accentColor) {
+        this.accentColor = accentColor;
+        setExpired(expired);
+    }
+
     @Override
     protected void onDraw(Canvas canvas) {
+        if (expired) {
+            return;
+        }
         final int centerX = getWidth() / 2;
         final int centerY = getHeight() / 2;
 

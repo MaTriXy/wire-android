@@ -67,22 +67,29 @@ public class TextViewUtils {
             return string;
         }
 
-        final int highlightEnd = string.lastIndexOf('_') - 1;
+        final int highlightEnd = string.lastIndexOf('_');
         if (highlightStart >= highlightEnd) {
             Timber.e("Failed to highlight text - make sure you have 2 _ markers to denote start and end of highlight region");
             return string;
         }
 
-        SpannableString colorSpannable = new SpannableString(string.replaceAll("_", ""));
+        StringBuilder stringBuilder = new StringBuilder(string.substring(0, highlightStart));
+        stringBuilder.append(string.substring(highlightStart + 1, highlightEnd));
+        if (highlightEnd < string.length() - 1) {
+            stringBuilder.append(string.substring(highlightEnd + 1, string.length()));
+        }
+
+
+        SpannableString colorSpannable = new SpannableString(stringBuilder.toString());
         colorSpannable.setSpan(new ForegroundColorSpan(highlightColor),
                                highlightStart,
-                               highlightEnd,
+                               highlightEnd - 1,
                                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         if (bold) {
             colorSpannable.setSpan(new CustomTypefaceSpan("",
                                                           context.getResources().getString(R.string.wire__typeface__bold)),
                                    highlightStart,
-                                   highlightEnd,
+                                   highlightEnd - 1,
                                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         }
         return colorSpannable;
@@ -182,6 +189,10 @@ public class TextViewUtils {
      * @param onClick
      */
     public static void linkifyText(TextView textView, final int highlightColor, boolean bold, final boolean underline, final Runnable onClick) {
+        linkifyText(textView, highlightColor, bold ? R.string.wire__typeface__medium : -1, true, onClick);
+    }
+
+    public static void linkifyText(TextView textView, final int highlightColor, int boldTypeface, final boolean underline, final Runnable onClick) {
         textView.setMovementMethod(LinkMovementMethod.getInstance());
         final String string = textView.getText().toString();
         final int highlightStart = string.indexOf('_');
@@ -205,6 +216,9 @@ public class TextViewUtils {
         ClickableSpan linkSpan = new ClickableSpan() {
             @Override
             public void onClick(View widget) {
+                if (onClick == null) {
+                    return;
+                }
                 onClick.run();
             }
 
@@ -217,8 +231,8 @@ public class TextViewUtils {
         };
 
         str.setSpan(linkSpan, highlightStart, highlightEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        if (bold) {
-            str.setSpan(new CustomTypefaceSpan("", textView.getResources().getString(R.string.wire__typeface__medium)),
+        if (boldTypeface > 0) {
+            str.setSpan(new CustomTypefaceSpan("", textView.getResources().getString(boldTypeface)),
                                     highlightStart,
                                     highlightEnd,
                                     Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);

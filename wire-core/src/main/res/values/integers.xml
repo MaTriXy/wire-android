@@ -23,16 +23,14 @@
     <integer name="circle_icon_button__alpha_stroke">100</integer>
     <integer name="animation_delay_short">150</integer>
     <integer name="animation_delay_very_long">350</integer>
-    <integer name="animation_duration_short">150</integer>
 
     <!-- Animation durations-->
+    <integer name="animation_duration_short">150</integer>
+    <integer name="animation_duration_medium_rare">200</integer>
     <integer name="animation_duration_medium">350</integer>
     <integer name="animation_duration_long">550</integer>
     <integer name="animation_duration_very_long">700</integer>
     <integer name="background_accent_color_transition_animation_duration">600</integer>
-
-    <!-- Other-->
-    <integer name="framework__num_of_accent_colors">7</integer>
 
     <!-- Color picker-->
     <!-- a value in [1, 100] -->
@@ -83,9 +81,7 @@
     <integer name="content__message__progress_duration">1500</integer>
     <integer name="typing_indicator__pause_random_time">1400</integer>
     <integer name="typing_indicator__pulse_duration">280</integer>
-    <integer name="content__image__polka_crossfade_duration">550</integer>
     <integer name="content__image__directly_final_duration">200</integer>
-    <integer name="content__image__polka_show_duration">500</integer>
     <integer name="content__image__progress_pending_stop">270</integer>
     <integer name="content__image__progress_duration">1500</integer>
 
@@ -191,5 +187,7 @@
     <integer name="share_location__current_location_marker__outer_ring_alpha">41</integer>
     <integer name="share_location__current_location_marker__mid_ring_alpha">102</integer>
     <integer name="share_location__current_location_marker__inner_ring_alpha">255</integer>
+
+    <integer name="account_preferences__min_name_length">2</integer>
 
 </resources>

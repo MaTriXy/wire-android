@@ -18,6 +18,7 @@
 package com.waz.zclient.pages.main;
 
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -46,6 +47,7 @@ import com.waz.zclient.pages.main.backgroundmain.views.BackgroundFrameLayout;
 import com.waz.zclient.pages.main.conversation.SingleImageFragment;
 import com.waz.zclient.pages.main.conversation.SingleImageMessageFragment;
 import com.waz.zclient.pages.main.conversation.SingleImageUserFragment;
+import com.waz.zclient.pages.main.conversation.VideoPlayerFragment;
 import com.waz.zclient.pages.main.conversationpager.ConversationPagerFragment;
 import com.waz.zclient.pages.main.giphy.GiphySharingPreviewFragment;
 import com.waz.zclient.pages.main.inappnotification.InAppNotificationFragment;
@@ -156,13 +158,15 @@ public class MainPhoneFragment extends BaseFragment<MainPhoneFragment.Container>
         }
 
         // Clear any overlays
-        dismissOnboardingHint(OnBoardingHintType.NONE);
+        dismissOnBoardingHint(OnBoardingHintType.NONE);
 
         if (getChildFragmentManager().getBackStackEntryCount() > 0) {
             Fragment topFragment = getChildFragmentManager().findFragmentByTag(getChildFragmentManager().getBackStackEntryAt(
                 0).getName());
             if (topFragment instanceof SingleImageFragment) {
                 return ((SingleImageFragment) topFragment).onBackPressed();
+            } else if (topFragment instanceof VideoPlayerFragment) {
+                return ((VideoPlayerFragment) topFragment).onBackPressed();
             } else if (topFragment instanceof GiphySharingPreviewFragment) {
                 if (!((GiphySharingPreviewFragment) topFragment).onBackPressed()) {
                     getChildFragmentManager().popBackStackImmediate(GiphySharingPreviewFragment.TAG,
@@ -188,6 +192,12 @@ public class MainPhoneFragment extends BaseFragment<MainPhoneFragment.Container>
             return true;
         }
 
+        fragment = getChildFragmentManager().findFragmentById(R.id.fl__overlay_container);
+        if (fragment instanceof OnBackPressedListener &&
+            ((OnBackPressedListener) fragment).onBackPressed()) {
+            return true;
+        }
+
         return getChildFragmentManager().popBackStackImmediate();
     }
 
@@ -203,7 +213,7 @@ public class MainPhoneFragment extends BaseFragment<MainPhoneFragment.Container>
     //////////////////////////////////////////////////////////////////////////////////////////
 
     @Override
-    public void dismissOnboardingHint(OnBoardingHintType requestedType) {
+    public void dismissOnBoardingHint(OnBoardingHintType requestedType) {
         getControllerFactory().getOnboardingController().hideOnboardingHint(requestedType);
     }
 
@@ -292,6 +302,23 @@ public class MainPhoneFragment extends BaseFragment<MainPhoneFragment.Container>
     }
 
     @Override
+    public void onShowVideo(Uri uri) {
+        getChildFragmentManager().beginTransaction()
+                                 .add(R.id.fl__overlay_container,
+                                      VideoPlayerFragment.newInstance(uri),
+                                      VideoPlayerFragment.TAG)
+                                 .addToBackStack(VideoPlayerFragment.TAG)
+                                 .commit();
+        getControllerFactory().getNavigationController().setRightPage(Page.SINGLE_MESSAGE, TAG);
+    }
+
+    @Override
+    public void onHideVideo() {
+        getChildFragmentManager().popBackStackImmediate(VideoPlayerFragment.TAG,
+                                                        FragmentManager.POP_BACK_STACK_INCLUSIVE);
+    }
+
+    @Override
     public void onSearch(String keyword) {
         getChildFragmentManager().beginTransaction()
                                  .add(R.id.fl__overlay_container,
@@ -303,6 +330,16 @@ public class MainPhoneFragment extends BaseFragment<MainPhoneFragment.Container>
 
     @Override
     public void onRandomSearch() {
+        getChildFragmentManager().beginTransaction()
+                                 .add(R.id.fl__overlay_container,
+                                      GiphySharingPreviewFragment.newInstance(),
+                                      GiphySharingPreviewFragment.TAG)
+                                 .addToBackStack(GiphySharingPreviewFragment.TAG)
+                                 .commit();
+    }
+
+    @Override
+    public void onTrendingSearch() {
         getChildFragmentManager().beginTransaction()
                                  .add(R.id.fl__overlay_container,
                                       GiphySharingPreviewFragment.newInstance(),

@@ -18,23 +18,24 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 -->
-<com.waz.zclient.ui.views.TouchFilterableLinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-                                                      xmlns:app="http://schemas.android.com/apk/res-auto"
-                                                      android:layout_width="match_parent"
-                                                      android:layout_height="match_parent"
-                                                      android:orientation="vertical"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:app="http://schemas.android.com/apk/res-auto"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:orientation="vertical"
     >
 
     <include layout="@layout/row_conversation_text_message" />
 
     <View
+        android:id="@+id/v__row_conversation__youtube_divider"
         android:layout_width="match_parent"
         android:layout_height="@dimen/wire__divider__height__thin"
         style="?wireDivider"
         />
 
     <FrameLayout
-        android:id="@+id/fl__youtube_image_container"
+        android:id="@+id/fl__row_conversation__youtube_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
@@ -48,6 +49,17 @@
             android:layout_gravity="center_horizontal"
             android:adjustViewBounds="false"
             android:scaleType="fitXY"
+            />
+
+        <com.waz.zclient.ui.text.GlyphTextView
+            android:id="@+id/gtv__row_conversation__youtube__ephemeral_type"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:textSize="@dimen/wire__text_size__regular"
+            android:text="@string/glyph__movie"
+            style="?wireBackgroundAsTextColor"
             />
 
         <com.waz.zclient.ui.text.GlyphTextView
@@ -74,6 +86,7 @@
             />
 
         <LinearLayout
+            android:id="@+id/ll_youtube_message__header_container"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/content__youtube__logo__padding_top"
@@ -108,9 +121,10 @@
     </FrameLayout>
 
     <View
+        android:id="@+id/v__row_conversation__youtube_second_divider"
         android:layout_width="match_parent"
         android:layout_height="@dimen/wire__divider__height__thin"
         style="?wireDivider"
         />
 
-</com.waz.zclient.ui.views.TouchFilterableLinearLayout>
+</LinearLayout>

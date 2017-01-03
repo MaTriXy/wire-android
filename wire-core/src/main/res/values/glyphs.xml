@@ -33,6 +33,7 @@
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__flip">\uE120</string>
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__list">\uE121</string>
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__grid">\uE123</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__is_typing">\uE124</string>
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__more">\uE125</string>
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__loading">\uE126</string>
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__info">\uE127</string>
@@ -42,6 +43,7 @@
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__tools">\uE134</string>
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__equalizer">\uE135</string>
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__ping">\uE137</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__fullscreen">\uE139</string>
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__profile">\uE142</string>
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__camera">\uE143</string>
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__snap">\uE144</string>
@@ -67,7 +69,8 @@
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__edit">\uE177</string>
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__paint">\uE179</string>
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__moon">\uE182</string>
-    <string translatable="false" tools:ignore="UnusedResources" name="glyph__love">\uE184</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__like">\uE183</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__liked">\uE184</string>
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__view">\uE185</string>
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__trash">\uE186</string>
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__addressbook">\uE187</string>
@@ -86,7 +89,6 @@
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__add">\uE216</string>
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__added">\uE217</string>
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__gif">\uE219</string>
-    <string translatable="false" tools:ignore="UnusedResources" name="glyph__liked">\uE220</string>
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__theme">\uE221</string>
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__end_call">\uE222</string>
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__invite">\uE223</string>
@@ -97,11 +99,38 @@
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__stop">\uE228</string>
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__record_alt">\uE229</string>
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__stop_alt">\uE230</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__delete_me">\uE231</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__delete_everywhere">\uE232</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__forward">\uE233</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__copy">\uE234</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__send">\uE235</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__keyboard">\uE236</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__emoji">\uE237</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__backspace">\uE238</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__hourglass">\uE239</string>
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__filter_helium">\uE240</string>
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__filter_jellyfish">\uE242</string>
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__filter_hare">\uE243</string>
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__filter_cathedral">\uE244</string>
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__filter_alien">\uE245</string>
     <string translatable="false" tools:ignore="UnusedResources" name="glyph__filter_robot">\uE246</string>
-    <string translatable="false" tools:ignore="UnusedResources" name="glyph__filter_reverse">\uE247</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__filter_rollercoaster">\uE247</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__emoji_flower">\uE250</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__emoji_cake">\uE251</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__emoji_car">\uE252</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__emoji_ball">\uE253</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__emoji_crown">\uE254</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__emoji_symbol">\uE255</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__emoji_flag">\uE256</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__ping_timed">\uE637</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__camera_timed">\uE643</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__location_timed">\uE648</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__attachment_timed">\uE654</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__microphone_on_timed">\uE659</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__sketch_timed">\uE679</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__gif_timed">\uE719</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__record_timed">\uE727</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__send_timed">\uE735</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__keyboard_timed">\uE736</string>
+    <string translatable="false" tools:ignore="UnusedResources" name="glyph__emoji_timed">\uE737</string>
 </resources>

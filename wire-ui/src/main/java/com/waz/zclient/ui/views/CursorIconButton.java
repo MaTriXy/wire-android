@@ -18,11 +18,13 @@
 package com.waz.zclient.ui.views;
 
 import android.content.Context;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
-import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.util.AttributeSet;
+import com.waz.zclient.ui.R;
+import com.waz.zclient.ui.cursor.CursorMenuItem;
 import com.waz.zclient.ui.text.GlyphTextView;
 import com.waz.zclient.ui.theme.ThemeUtils;
 import com.waz.zclient.ui.utils.ColorUtils;
@@ -35,6 +37,7 @@ public class CursorIconButton extends GlyphTextView {
     private static final float TRESHOLD = 0.55f;
     private static final float DARKEN_FACTOR = 0.1f;
     private float alphaPressed;
+    private CursorMenuItem cursorMenuItem;
 
     public CursorIconButton(Context context) {
         this(context, null);
@@ -48,33 +51,89 @@ public class CursorIconButton extends GlyphTextView {
         super(context, attrs, defStyleAttr);
     }
 
-    public void setAccentColor(int color) {
+    public void setCursorMenuItem(CursorMenuItem cursorMenuItem) {
+        this.cursorMenuItem = cursorMenuItem;
+        setText(cursorMenuItem.glyphResId);
+    }
+
+    public CursorMenuItem getCursorMenuItem() {
+        return cursorMenuItem;
+    }
+
+    public void showEphemeralMode(int color) {
+        setTextColor(color);
+        if (cursorMenuItem != null) {
+            setText(cursorMenuItem.timedGlyphResId);
+        }
+    }
+
+    public void hideEphemeralMode(int color) {
+        setTextColor(color);
+        if (cursorMenuItem != null) {
+            setText(cursorMenuItem.glyphResId);
+        }
+    }
+
+    public void setPressedBackgroundColor(int color) {
+        setBackgroundColor(Color.TRANSPARENT, color);
+    }
+
+    public void setSolidBackgroundColor(int color) {
+        setBackgroundColor(color, color);
+    }
+
+    private void setBackgroundColor(int defaultColor, int pressedColor) {
         if (ThemeUtils.isDarkTheme(getContext())) {
             alphaPressed = PRESSED_ALPHA__DARK;
         } else {
             alphaPressed = PRESSED_ALPHA__LIGHT;
         }
 
-        float avg = (Color.red(color) + Color.blue(color) + Color.green(color)) / (3 * 255.0f);
+        float avg = (Color.red(pressedColor) + Color.blue(pressedColor) + Color.green(pressedColor)) / (3 * 255.0f);
         if (avg > TRESHOLD) {
             float darken = 1.0f - DARKEN_FACTOR;
-            color = Color.rgb((int) (Color.red(color) * darken),
-                              (int) (Color.green(color) * darken),
-                              (int) (Color.blue(color) * darken));
+            pressedColor = Color.rgb((int) (Color.red(pressedColor) * darken),
+                              (int) (Color.green(pressedColor) * darken),
+                              (int) (Color.blue(pressedColor) * darken));
         }
 
-        int pressed = ColorUtils.injectAlpha(alphaPressed, color);
-        GradientDrawable pressedTextColor = new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP,
+        int pressed = ColorUtils.injectAlpha(alphaPressed, pressedColor);
+        GradientDrawable pressedBgColor = new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP,
                                                                  new int[] {pressed, pressed});
-        pressedTextColor.setShape(GradientDrawable.OVAL);
+        pressedBgColor.setShape(GradientDrawable.OVAL);
+
+        GradientDrawable defaultBgColor = new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP,
+                                                                 new int[] {defaultColor, defaultColor});
+        defaultBgColor.setShape(GradientDrawable.OVAL);
 
         StateListDrawable states = new StateListDrawable();
-        states.addState(new int[] {android.R.attr.state_pressed}, pressedTextColor);
-        states.addState(new int[] {android.R.attr.state_focused}, pressedTextColor);
-        states.addState(new int[] {-android.R.attr.state_enabled}, pressedTextColor);
-        states.addState(new int[] {}, new ColorDrawable(Color.TRANSPARENT));
+        states.addState(new int[] {android.R.attr.state_pressed}, pressedBgColor);
+        states.addState(new int[] {android.R.attr.state_focused}, pressedBgColor);
+        states.addState(new int[] {-android.R.attr.state_enabled}, pressedBgColor);
+        states.addState(new int[] {}, defaultBgColor);
 
         setBackground(states);
+
         invalidate();
+    }
+
+    public void initTextColor(int selectedColor) {
+        int pressedColor = getResources().getColor(R.color.text__primary_dark_40);
+        int focusedColor = pressedColor;
+        int enabledColor = getResources().getColor(R.color.text__primary_dark);
+        int disabledColor = getResources().getColor(R.color.text__primary_dark_16);
+
+        if (!ThemeUtils.isDarkTheme(getContext())) {
+            pressedColor = getResources().getColor(R.color.text__primary_light__40);
+            focusedColor = pressedColor;
+            enabledColor = getResources().getColor(R.color.text__primary_light);
+            disabledColor = getResources().getColor(R.color.text__primary_light_16);
+        }
+
+        int[] colors = {pressedColor, focusedColor, selectedColor, enabledColor, disabledColor};
+        int[][] states = {{android.R.attr.state_pressed}, {android.R.attr.state_focused}, {android.R.attr.state_selected}, {android.R.attr.state_enabled}, {-android.R.attr.state_enabled}};
+        ColorStateList colorStateList = new ColorStateList(states, colors);
+
+        super.setTextColor(colorStateList);
     }
 }

@@ -26,39 +26,50 @@ import android.util.AttributeSet;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.FrameLayout;
-import com.waz.api.AudioAssetForUpload;
-import com.waz.api.AudioEffect;
+import com.waz.api.EphemeralExpiration;
 import com.waz.zclient.R;
 import com.waz.zclient.controllers.globallayout.KeyboardHeightObserver;
 import com.waz.zclient.controllers.globallayout.KeyboardVisibilityObserver;
+import com.waz.zclient.pages.extendedcursor.emoji.EmojiKeyboardLayout;
+import com.waz.zclient.pages.extendedcursor.ephemeral.EphemeralLayout;
+import com.waz.zclient.pages.extendedcursor.image.CursorImagesLayout;
 import com.waz.zclient.pages.extendedcursor.voicefilter.VoiceFilterLayout;
 import com.waz.zclient.ui.animation.interpolators.penner.Expo;
 import com.waz.zclient.ui.utils.KeyboardUtils;
 import com.waz.zclient.utils.ViewUtils;
 
+import java.util.List;
+import java.util.Set;
+
 public class ExtendedCursorContainer extends FrameLayout implements KeyboardHeightObserver,
-                                                                    KeyboardVisibilityObserver,
-                                                                    VoiceFilterLayout.Callback {
-    public static final String TAG = ExtendedCursorContainer.class.getSimpleName();
+                                                                    KeyboardVisibilityObserver {
     private static final String PREF__NAME = "PREF__NAME";
     private static final String PREF__KEY__KEYBOARD_HEIGHT = "PREF__KEY__KEYBOARD_HEIGHT";
     private static final String PREF__KEY__KEYBOARD_HEIGHT_LANDSCAPE = "PREF__KEY__KEYBOARD_HEIGHT_LANDSCAPE";
+    private Callback callback;
+
+    public enum Type {
+        NONE,
+        VOICE_FILTER_RECORDING,
+        IMAGES,
+        EMOJIS,
+        EPHEMERAL
+    }
+
     private final SharedPreferences sharedPreferences;
     private int defaultExtendedContainerHeight;
 
     private Type type;
     private int accentColor;
-    private Callback callback;
     private boolean isExpanded;
 
     private VoiceFilterLayout voiceFilterLayout;
+    private EmojiKeyboardLayout emojiKeyboardLayout;
+    private EphemeralLayout ephemeralLayout;
 
     private int keyboardHeightLandscape;
     private int keyboardHeight;
-
-    public void setCallback(Callback callback) {
-        this.callback = callback;
-    }
+    private CursorImagesLayout cursorImagesLayout;
 
     public ExtendedCursorContainer(Context context) {
         this(context, null);
@@ -77,24 +88,6 @@ public class ExtendedCursorContainer extends FrameLayout implements KeyboardHeig
         initKeyboardHeight();
     }
 
-    private void initKeyboardHeight() {
-        defaultExtendedContainerHeight = getResources().getDimensionPixelSize(R.dimen.extend_container_height);
-
-        if (sharedPreferences.contains(PREF__KEY__KEYBOARD_HEIGHT)) {
-            keyboardHeight = sharedPreferences.getInt(PREF__KEY__KEYBOARD_HEIGHT,
-                                                      getResources().getDimensionPixelSize(R.dimen.extend_container_height));
-        } else {
-            keyboardHeight = -1;
-        }
-
-        if (sharedPreferences.contains(PREF__KEY__KEYBOARD_HEIGHT_LANDSCAPE)) {
-            keyboardHeightLandscape = sharedPreferences.getInt(PREF__KEY__KEYBOARD_HEIGHT_LANDSCAPE,
-                                                               getResources().getDimensionPixelSize(R.dimen.extend_container_height));
-        } else {
-            keyboardHeightLandscape = -1;
-        }
-    }
-
     public void setKeyboardHeight(int height) {
         if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
             if (height > keyboardHeightLandscape && height > defaultExtendedContainerHeight) {
@@ -111,78 +104,34 @@ public class ExtendedCursorContainer extends FrameLayout implements KeyboardHeig
         updateHeight();
     }
 
-    private void updateHeight() {
-        int newHeight = defaultExtendedContainerHeight;
-        if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
-            if (keyboardHeightLandscape != -1) {
-                newHeight = keyboardHeightLandscape;
-            }
-        } else {
-            if (keyboardHeight != -1) {
-                newHeight = keyboardHeight;
-            }
-        }
-
-        getLayoutParams().height = newHeight;
-    }
-
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         updateHeight();
     }
 
-    public void openWithType(Type type) {
-        if (this.type == type) {
-            return;
-        }
-
-        this.type = type;
-
-        removeAllViews();
-
-        switch (type) {
-            case VOICE_FILTER_RECORDING:
-                voiceFilterLayout = (VoiceFilterLayout) LayoutInflater.from(getContext()).inflate(R.layout.voice_filter_layout,
-                                                                                                  this,
-                                                                                                  false);
-                voiceFilterLayout.setAccentColor(accentColor);
-                voiceFilterLayout.setCallback(this);
-                addView(voiceFilterLayout);
-                break;
-        }
-
-        if (KeyboardUtils.isKeyboardVisible(getContext())) {
-            KeyboardUtils.closeKeyboardIfShown((Activity) getContext());
-            new Handler().postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    animateUp();
-                }
-            }, getResources().getInteger(R.integer.animation_delay_short));
-        } else if (!isExpanded) {
-            animateUp();
-        }
+    public void openVoiceFilter(VoiceFilterLayout.Callback callback) {
+        openWithType(Type.VOICE_FILTER_RECORDING);
+        voiceFilterLayout.setCallback(callback);
     }
 
-    private void animateUp() {
-        setTranslationY(ViewUtils.toPx(getContext(), 160));
-        animate()
-            .translationY(0)
-            .setDuration(150)
-            .setInterpolator(new Expo.EaseOut())
-            .withStartAction(new Runnable() {
-                @Override
-                public void run() {
-                    setVisibility(View.VISIBLE);
-                }
-            })
-            .withEndAction(new Runnable() {
-                @Override
-                public void run() {
-                    isExpanded = true;
-                }
-            });
+    public void openCursorImages(CursorImagesLayout.Callback callback) {
+        openWithType(Type.IMAGES);
+        cursorImagesLayout.setCallback(callback);
+    }
+
+    public void openEmojis(List<String> recent,
+                           Set<String> unsupported,
+                           EmojiKeyboardLayout.Callback callback) {
+        openWithType(Type.EMOJIS);
+        emojiKeyboardLayout.setCallback(callback);
+        emojiKeyboardLayout.setEmojis(recent, unsupported);
+    }
+
+    public void openEphemeral(EphemeralLayout.Callback callback, EphemeralExpiration expiration) {
+        openWithType(Type.EPHEMERAL);
+        ephemeralLayout.setSelectedExpiration(expiration);
+        ephemeralLayout.setCallback(callback);
     }
 
     public void setAccentColor(int accentColor) {
@@ -209,15 +158,23 @@ public class ExtendedCursorContainer extends FrameLayout implements KeyboardHeig
     }
 
     public void close(boolean immediate) {
+        Type lastType = type;
         type = Type.NONE;
-
-        if (voiceFilterLayout != null) {
-            voiceFilterLayout.onClose();
+        if (!isExpanded) {
+            return;
         }
 
+        if (callback != null) {
+            callback.onExtendedCursorClosed(lastType);
+        }
+
+        isExpanded = false;
+        closeCursorImages();
+        closeVoiceFilter();
+
         if (immediate) {
-            isExpanded = false;
             setVisibility(View.GONE);
+            removeAllViews();
             return;
         }
 
@@ -229,8 +186,8 @@ public class ExtendedCursorContainer extends FrameLayout implements KeyboardHeig
             .withEndAction(new Runnable() {
                 @Override
                 public void run() {
-                    isExpanded = false;
                     setVisibility(View.GONE);
+                    removeAllViews();
                 }
             });
     }
@@ -239,30 +196,138 @@ public class ExtendedCursorContainer extends FrameLayout implements KeyboardHeig
         return isExpanded;
     }
 
-    @Override
-    public void onCancel() {
-        close(false);
+    public Type getType() {
+        return type;
     }
 
-    @Override
-    public void onAudioMessageRecordingStarted() {
-        callback.onAudioMessageRecordingStarted();
+    private void openWithType(Type type) {
+        if (this.type == type) {
+            return;
+        }
+
+        this.type = type;
+
+        removeAllViews();
+
+        switch (type) {
+            case VOICE_FILTER_RECORDING:
+                closeCursorImages();
+                voiceFilterLayout = (VoiceFilterLayout) LayoutInflater.from(getContext()).inflate(R.layout.voice_filter_layout,
+                                                                                                  this,
+                                                                                                  false);
+                voiceFilterLayout.setAccentColor(accentColor);
+                addView(voiceFilterLayout);
+                break;
+            case IMAGES:
+                closeVoiceFilter();
+                cursorImagesLayout = (CursorImagesLayout) LayoutInflater.from(getContext()).inflate(R.layout.cursor_images_layout,
+                                                                                                    this,
+                                                                                                    false);
+                addView(cursorImagesLayout);
+                break;
+            case EMOJIS:
+                closeVoiceFilter();
+                closeCursorImages();
+
+                emojiKeyboardLayout = (EmojiKeyboardLayout) LayoutInflater.from(getContext()).inflate(R.layout.emoji_keyboard_layout,
+                                                                                                     this,
+                                                                                                     false);
+                addView(emojiKeyboardLayout);
+                break;
+            case EPHEMERAL:
+                closeVoiceFilter();
+                closeCursorImages();
+
+                ephemeralLayout = (EphemeralLayout) LayoutInflater.from(getContext()).inflate(R.layout.ephemeral_keyboard_layout, this, false);
+                addView(ephemeralLayout);
+                break;
+        }
+
+        if (KeyboardUtils.isKeyboardVisible(getContext())) {
+            KeyboardUtils.closeKeyboardIfShown((Activity) getContext());
+            new Handler().postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    animateUp();
+                }
+            }, getResources().getInteger(R.integer.animation_delay_short));
+        } else if (!isExpanded) {
+            animateUp();
+        }
     }
 
-    @Override
-    public void sendRecording(AudioAssetForUpload audioAssetForUpload, AudioEffect appliedAudioEffect) {
-        callback.onSendAudioMessage(audioAssetForUpload, appliedAudioEffect);
-        close(false);
+    private void closeVoiceFilter() {
+        if (voiceFilterLayout != null) {
+            voiceFilterLayout.onClose();
+            voiceFilterLayout = null;
+        }
     }
 
-    public enum Type {
-        NONE,
-        VOICE_FILTER_RECORDING
+    private void closeCursorImages() {
+        if (cursorImagesLayout != null) {
+            cursorImagesLayout.onClose();
+            cursorImagesLayout = null;
+        }
+    }
+
+    private void animateUp() {
+        setTranslationY(ViewUtils.toPx(getContext(), 160));
+        animate()
+            .translationY(0)
+            .setDuration(150)
+            .setInterpolator(new Expo.EaseOut())
+            .withStartAction(new Runnable() {
+                @Override
+                public void run() {
+                    setVisibility(View.VISIBLE);
+                }
+            })
+            .withEndAction(new Runnable() {
+                @Override
+                public void run() {
+                    isExpanded = true;
+                }
+            });
+    }
+
+    private void initKeyboardHeight() {
+        defaultExtendedContainerHeight = getResources().getDimensionPixelSize(R.dimen.extend_container_height);
+
+        if (sharedPreferences.contains(PREF__KEY__KEYBOARD_HEIGHT)) {
+            keyboardHeight = sharedPreferences.getInt(PREF__KEY__KEYBOARD_HEIGHT,
+                                                      getResources().getDimensionPixelSize(R.dimen.extend_container_height));
+        } else {
+            keyboardHeight = -1;
+        }
+
+        if (sharedPreferences.contains(PREF__KEY__KEYBOARD_HEIGHT_LANDSCAPE)) {
+            keyboardHeightLandscape = sharedPreferences.getInt(PREF__KEY__KEYBOARD_HEIGHT_LANDSCAPE,
+                                                               getResources().getDimensionPixelSize(R.dimen.extend_container_height));
+        } else {
+            keyboardHeightLandscape = -1;
+        }
+    }
+
+    private void updateHeight() {
+        int newHeight = defaultExtendedContainerHeight;
+        if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            if (keyboardHeightLandscape != -1) {
+                newHeight = keyboardHeightLandscape;
+            }
+        } else {
+            if (keyboardHeight != -1) {
+                newHeight = keyboardHeight;
+            }
+        }
+
+        getLayoutParams().height = newHeight;
+    }
+
+    public void setCallback(Callback callback) {
+        this.callback = callback;
     }
 
     public interface Callback {
-        void onAudioMessageRecordingStarted();
-
-        void onSendAudioMessage(AudioAssetForUpload audioAssetForUpload, AudioEffect appliedAudioEffect);
+        void onExtendedCursorClosed(ExtendedCursorContainer.Type lastType);
     }
 }

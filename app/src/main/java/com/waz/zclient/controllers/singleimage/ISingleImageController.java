@@ -17,13 +17,11 @@
  */
 package com.waz.zclient.controllers.singleimage;
 
-import android.support.annotation.Nullable;
+import android.net.Uri;
 import android.view.View;
-import com.waz.annotations.Controller;
 import com.waz.api.Message;
 import com.waz.api.User;
 
-@Controller
 public interface ISingleImageController {
     void addSingleImageObserver(SingleImageObserver observer);
 
@@ -35,15 +33,13 @@ public interface ISingleImageController {
 
     void updateViewReferences();
 
-    void setViewReferences(View imageContainer, @Nullable View loadingIndicatorView);
+    void setViewReferences(View imageContainer);
 
     void setContainerOutOfScreen(boolean containerOutOfScreen);
 
     boolean isContainerOutOfScreen();
 
     View getImageContainer();
-
-    View getLoadingIndicator();
 
     void tearDown();
 
@@ -52,4 +48,8 @@ public interface ISingleImageController {
     void showSingleImage(Message message);
 
     void showSingleImage(User user);
+
+    void showVideo(Uri uri);
+
+    void hideVideo();
 }

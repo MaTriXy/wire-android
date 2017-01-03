@@ -28,6 +28,7 @@ import android.view.animation.AlphaAnimation;
 import android.view.animation.Animation;
 import com.waz.api.CoreList;
 import com.waz.api.IConversation;
+import com.waz.api.Message;
 import com.waz.api.OtrClient;
 import com.waz.api.User;
 import com.waz.api.UsersList;
@@ -131,7 +132,9 @@ public class TabbedParticipantBodyFragment extends BaseFragment<TabbedParticipan
         } else {
             color = getResources().getColor(R.color.text__secondary_light);
         }
-        tabIndicatorLayout.setPrimaryColor(color);
+        if (tabIndicatorLayout != null) {
+            tabIndicatorLayout.setPrimaryColor(color);
+        }
         viewPager = ViewUtils.getView(view, R.id.vp_single_participant_viewpager);
         viewPager.setAdapter(new TabbedParticipantPagerAdapter(getActivity(), participantOtrDeviceAdapter, this));
         viewPager.addOnPageChangeListener(this);
@@ -311,16 +314,6 @@ public class TabbedParticipantBodyFragment extends BaseFragment<TabbedParticipan
     }
 
     @Override
-    public void onShowCommonUser(User user) {
-
-    }
-
-    @Override
-    public void onHideCommonUser() {
-
-    }
-
-    @Override
     public void onAddPeopleToConversation() {
 
     }
@@ -344,6 +337,11 @@ public class TabbedParticipantBodyFragment extends BaseFragment<TabbedParticipan
 
     @Override
     public void onHideOtrClient() {
+
+    }
+
+    @Override
+    public void onShowLikesList(Message message) {
 
     }
 

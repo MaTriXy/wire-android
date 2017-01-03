@@ -17,20 +17,30 @@
  */
 package com.waz.zclient.pages.main.drawing;
 
+import android.Manifest;
 import android.app.Activity;
+import android.content.Intent;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
+import android.graphics.Color;
 import android.hardware.Sensor;
 import android.hardware.SensorManager;
 import android.media.ExifInterface;
+import android.net.Uri;
 import android.os.Bundle;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
+import android.support.v7.widget.Toolbar;
 import android.view.LayoutInflater;
+import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
+import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.TextView;
+import com.waz.api.BitmapCallback;
 import com.waz.api.ImageAsset;
 import com.waz.api.ImageAssetFactory;
 import com.waz.api.LoadHandle;
@@ -39,14 +49,24 @@ import com.waz.zclient.OnBackPressedListener;
 import com.waz.zclient.R;
 import com.waz.zclient.controllers.accentcolor.AccentColorObserver;
 import com.waz.zclient.controllers.drawing.DrawingController;
-import com.waz.zclient.controllers.orientation.OrientationControllerObserver;
+import com.waz.zclient.controllers.drawing.IDrawingController;
+import com.waz.zclient.controllers.globallayout.KeyboardVisibilityObserver;
+import com.waz.zclient.controllers.permission.RequestPermissionsObserver;
 import com.waz.zclient.pages.BaseFragment;
+import com.waz.zclient.pages.main.conversation.AssetIntentsManager;
+import com.waz.zclient.ui.colorpicker.ColorPickerLayout;
+import com.waz.zclient.ui.colorpicker.EmojiBottomSheetDialog;
+import com.waz.zclient.ui.colorpicker.EmojiSize;
+import com.waz.zclient.ui.sketch.DrawingCanvasCallback;
 import com.waz.zclient.ui.sketch.DrawingCanvasView;
-import com.waz.zclient.ui.colorpicker.ColorPickerDotLayout;
-import com.waz.zclient.ui.colorpicker.ColorPickerScrollView;
 import com.waz.zclient.ui.text.TypefaceTextView;
+import com.waz.zclient.ui.utils.ColorUtils;
+import com.waz.zclient.ui.utils.KeyboardUtils;
+import com.waz.zclient.ui.utils.MathUtils;
+import com.waz.zclient.ui.views.CursorIconButton;
+import com.waz.zclient.ui.views.SketchEditText;
 import com.waz.zclient.utils.LayoutSpec;
-import com.waz.zclient.utils.SquareOrientation;
+import com.waz.zclient.utils.PermissionUtils;
 import com.waz.zclient.utils.TrackingUtils;
 import com.waz.zclient.utils.ViewUtils;
 import com.waz.zclient.utils.debug.ShakeEventListener;
@@ -55,54 +75,142 @@ import net.hockeyapp.android.ExceptionHandler;
 import java.util.Locale;
 
 public class DrawingFragment extends BaseFragment<DrawingFragment.Container> implements OnBackPressedListener,
-                                                                                        ColorPickerDotLayout.OnColorSelectedListener,
-                                                                                        OrientationControllerObserver,
-                                                                                        DrawingCanvasView.DrawingCanvasCallback,
+                                                                                        ColorPickerLayout.OnColorSelectedListener,
+                                                                                        DrawingCanvasCallback,
                                                                                         ViewTreeObserver.OnScrollChangedListener,
                                                                                         AccentColorObserver,
-                                                                                        ColorPickerDotLayout.OnWidthChangedListener {
+                                                                                        AssetIntentsManager.Callback,
+                                                                                        RequestPermissionsObserver,
+                                                                                        ColorPickerLayout.OnWidthChangedListener,
+                                                                                        KeyboardVisibilityObserver {
 
     public static final String TAG = DrawingFragment.class.getName();
     private static final String SAVED_INSTANCE_BITMAP = "SAVED_INSTANCE_BITMAP";
     private static final String ARGUMENT_BACKGROUND_IMAGE = "ARGUMENT_BACKGROUND_IMAGE";
     private static final String ARGUMENT_DRAWING_DESTINATION = "ARGUMENT_DRAWING_DESTINATION";
+    private static final String ARGUMENT_DRAWING_METHOD = "ARGUMENT_DRAWING_METHOD";
 
-    private final static int ROTATION_REVERSE = -180;
-    private final static int ROTATION_FLIP = 180;
-    private final static int ROTATION_FORWARD_90 = 90;
-    private final static int ROTATION_BACKWARD_90 = -90;
+    private static final String[] SKETCH_FROM_GALLERY_PERMISSION = new String[] {Manifest.permission.READ_EXTERNAL_STORAGE};
+    private static final int OPEN_SKETCH_FROM_GALLERY = 8864;
+
+    private static final float TEXT_ALPHA_INVISIBLE = 0F;
+    private static final float TEXT_ALPHA_MOVE = 0.2F;
+    private static final float TEXT_ALPHA_VISIBLE = 1F;
+    private static final int SEND_BUTTON_DISABLED_ALPHA = 102;
+    private static final int DEFAULT_TEXT_COLOR = Color.WHITE;
+    private static final int EDIT_BOX_POS_MARGIN = 10;
 
     private ShakeEventListener shakeEventListener;
     private SensorManager sensorManager;
-
+    private AssetIntentsManager assetIntentsManager;
     private DrawingCanvasView drawingCanvasView;
-    private ColorPickerDotLayout colorLayout;
+    private ColorPickerLayout colorLayout;
     private HorizontalScrollView colorPickerScrollContainer;
-    private TypefaceTextView conversationTitle;
+    private Toolbar toolbar;
 
-    private ColorPickerScrollView colorPickerScrollBar;
+    // TODO uncomment once AN-4649 is fixed
+    //private ColorPickerScrollView colorPickerScrollBar;
 
     private TypefaceTextView drawingViewTip;
     private View drawingTipBackground;
 
-    //normal sketch or single image view edit
-    private TextView sendDrawingButton;
-    private TextView cancelDrawingButton;
-    private TextView undoSketchButton;
+    private CursorIconButton sendDrawingButton;
+    private SketchEditText sketchEditTextView;
+    private boolean shouldOpenEditText = false;
+    private int currentBackgroundColor;
+    private TextView actionButtonText;
+    private TextView actionButtonEmoji;
+    private TextView actionButtonSketch;
+    private View galleryButton;
+    private int defaultTextColor;
 
     private ImageAsset backgroundImage;
     private LoadHandle bitmapLoadHandle;
 
     private DrawingController.DrawingDestination drawingDestination;
+    private DrawingController.DrawingMethod drawingMethod;
     private boolean includeBackgroundImage;
+    private EmojiSize currentEmojiSize = EmojiSize.SMALL;
 
-    private SquareOrientation currentConfigOrientation = SquareOrientation.NONE;
+    private View.OnTouchListener drawingCanvasViewOnTouchListener = new View.OnTouchListener() {
+        @Override
+        public boolean onTouch(View v, MotionEvent event) {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    hideTip();
+                    break;
+            }
+            return false;
+        }
+    };
+    private Toolbar.OnMenuItemClickListener toolbarOnMenuItemClickListener =  new Toolbar.OnMenuItemClickListener() {
+        @Override
+        public boolean onMenuItemClick(MenuItem item) {
+            switch (item.getItemId()) {
+                case R.id.close:
+                    if (getControllerFactory() == null || getControllerFactory().isTornDown()) {
+                        return false;
+                    }
+                    getControllerFactory().getDrawingController().hideDrawing(drawingDestination, false);
+                    return true;
+            }
+            return false;
+        }
+    };
+    private View.OnClickListener toolbarNavigationClickListener = new View.OnClickListener() {
+        @Override
+        public void onClick(View v) {
+            if (drawingCanvasView != null) {
+                KeyboardUtils.hideKeyboard(getActivity());
+                drawingCanvasView.undo();
+            }
+        }
+    };
+    private View.OnTouchListener sketchEditTextOnTouchListener = new View.OnTouchListener() {
+        private float initialX;
+        private float initialY;
+        private FrameLayout.LayoutParams params;
+        @Override
+        public boolean onTouch(View v, MotionEvent event) {
+            if (drawingCanvasView.getCurrentMode() == DrawingCanvasView.Mode.TEXT) {
+                switch (event.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        initialX = event.getX();
+                        initialY = event.getY();
+                        params = (FrameLayout.LayoutParams) sketchEditTextView.getLayoutParams();
+                        sketchEditTextView.setAlpha(TEXT_ALPHA_MOVE);
+                        break;
+                    case MotionEvent.ACTION_MOVE:
+                        params.leftMargin += (int) (event.getX() - initialX);
+                        params.topMargin += (int) (event.getY() - initialY);
+                        clampSketchEditBoxPosition(params);
+                        sketchEditTextView.setLayoutParams(params);
+                        break;
+                    case MotionEvent.ACTION_UP:
+                        closeKeyboard();
+                        break;
+                }
+            }
+            return drawingCanvasView.onTouchEvent(event);
+        }
+    };
+    private SketchEditText.SketchEditTextListener sketchEditTextListener = new SketchEditText.SketchEditTextListener() {
+        @Override
+        public void editTextChanged() {
+            sketchEditTextView.setBackground(ColorUtils.getRoundedTextBoxBackground(getContext(), currentBackgroundColor, sketchEditTextView.getMeasuredHeight()));
+        }
+    };
 
     public static DrawingFragment newInstance(ImageAsset backgroundAsset, DrawingController.DrawingDestination drawingDestination) {
+        return DrawingFragment.newInstance(backgroundAsset, drawingDestination, IDrawingController.DrawingMethod.DRAW);
+    }
+
+    public static DrawingFragment newInstance(ImageAsset backgroundAsset, DrawingController.DrawingDestination drawingDestination, DrawingController.DrawingMethod method) {
         DrawingFragment fragment = new DrawingFragment();
         Bundle bundle = new Bundle();
         bundle.putParcelable(ARGUMENT_BACKGROUND_IMAGE, backgroundAsset);
         bundle.putString(ARGUMENT_DRAWING_DESTINATION, drawingDestination.toString());
+        bundle.putString(ARGUMENT_DRAWING_METHOD, method.toString());
         fragment.setArguments(bundle);
         return fragment;
     }
@@ -121,7 +229,10 @@ public class DrawingFragment extends BaseFragment<DrawingFragment.Container> imp
         Bundle args = getArguments();
         backgroundImage = args.getParcelable(ARGUMENT_BACKGROUND_IMAGE);
         drawingDestination = DrawingController.DrawingDestination.valueOf(args.getString(ARGUMENT_DRAWING_DESTINATION));
+        drawingMethod = DrawingController.DrawingMethod.valueOf(args.getString(ARGUMENT_DRAWING_METHOD));
         sensorManager = (SensorManager) getActivity().getSystemService(Activity.SENSOR_SERVICE);
+        defaultTextColor = ContextCompat.getColor(getContext(), R.color.text__primary_light);
+        assetIntentsManager = new AssetIntentsManager(getActivity(), this, savedInstanceState);
     }
 
     @Override
@@ -129,49 +240,85 @@ public class DrawingFragment extends BaseFragment<DrawingFragment.Container> imp
         View rootView = inflater.inflate(R.layout.fragment_drawing, container, false);
         drawingCanvasView = ViewUtils.getView(rootView, R.id.dcv__canvas);
         drawingCanvasView.setDrawingCanvasCallback(this);
-        drawingCanvasView.setOnTouchListener(new View.OnTouchListener() {
-            @Override
-            public boolean onTouch(View v, MotionEvent event) {
-                switch (event.getAction()) {
-                    case MotionEvent.ACTION_DOWN:
-                        drawingViewTip.setVisibility(View.GONE);
-                        drawingTipBackground.setVisibility(View.GONE);
-                        drawingCanvasView.setOnTouchListener(null);
-                        break;
-                }
-                return false;
-            }
-        });
+        drawingCanvasView.setDrawingColor(getControllerFactory().getAccentColorController().getColor());
+        drawingCanvasView.setOnTouchListener(drawingCanvasViewOnTouchListener);
 
         colorPickerScrollContainer = ViewUtils.getView(rootView, R.id.hsv_color_picker_scroll_view);
 
         colorLayout = ViewUtils.getView(rootView, R.id.cpdl__color_layout);
         colorLayout.setOnColorSelectedListener(this);
-        colorLayout.setAccentColors(getResources().getIntArray(R.array.draw_color));
-        colorLayout.setCurrentColor(getControllerFactory().getAccentColorController().getColor());
+        int[] colors = getResources().getIntArray(R.array.draw_color);
+        colorLayout.setAccentColors(colors, getControllerFactory().getAccentColorController().getColor());
         colorLayout.getViewTreeObserver().addOnScrollChangedListener(this);
 
-        colorPickerScrollBar = ViewUtils.getView(rootView, R.id.cpsb__color_picker_scrollbar);
-        colorPickerScrollBar.setScrollBarColor(getControllerFactory().getAccentColorController().getColor());
+        // TODO uncomment once AN-4649 is fixed
+//        colorPickerScrollBar = ViewUtils.getView(rootView, R.id.cpsb__color_picker_scrollbar);
+//        colorPickerScrollBar.setScrollBarColor(getControllerFactory().getAccentColorController().getColor());
 
-        conversationTitle = ViewUtils.getView(rootView, R.id.ttv__drawing__conversation__name);
+        TypefaceTextView conversationTitle = ViewUtils.getView(rootView, R.id.tv__drawing_toolbar__title);
         conversationTitle.setText(getStoreFactory().getConversationStore().getCurrentConversation().getName().toUpperCase(Locale.getDefault()));
+        toolbar = ViewUtils.getView(rootView, R.id.t_drawing_toolbar);
+        toolbar.inflateMenu(R.menu.toolbar_sketch);
+        toolbar.setOnMenuItemClickListener(toolbarOnMenuItemClickListener);
+        toolbar.setNavigationOnClickListener(toolbarNavigationClickListener);
+        toolbar.setNavigationIcon(R.drawable.toolbar_action_undo_disabled);
+
+        actionButtonText = ViewUtils.getView(rootView, R.id.gtv__drawing_button__text);
+        actionButtonText.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                onTextClick();
+            }
+        });
+        actionButtonEmoji = ViewUtils.getView(rootView, R.id.gtv__drawing_button__emoji);
+        actionButtonEmoji.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                onEmojiClick();
+            }
+        });
+        actionButtonSketch = ViewUtils.getView(rootView, R.id.gtv__drawing_button__sketch);
+        actionButtonSketch.setTextColor(getControllerFactory().getAccentColorController().getColor());
+        actionButtonSketch.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                onSketchClick();
+            }
+        });
+
+        galleryButton = ViewUtils.getView(rootView, R.id.gtv__drawing__gallery_button);
+        galleryButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                if (PermissionUtils.hasSelfPermissions(getContext(), SKETCH_FROM_GALLERY_PERMISSION)) {
+                    sketchEditTextView.destroyDrawingCache();
+                    assetIntentsManager.openGalleryForSketch();
+                } else {
+                    ActivityCompat.requestPermissions(getActivity(),
+                                                      SKETCH_FROM_GALLERY_PERMISSION,
+                                                      OPEN_SKETCH_FROM_GALLERY);
+                }
+            }
+        });
 
         drawingTipBackground = ViewUtils.getView(rootView, R.id.v__tip_background);
         drawingViewTip = ViewUtils.getView(rootView, R.id.ttv__drawing__view__tip);
         drawingTipBackground.setVisibility(View.INVISIBLE);
 
-        cancelDrawingButton = ViewUtils.getView(rootView, R.id.tv__cancel_button);
-        cancelDrawingButton.setOnClickListener(sketchButtonsOnClickListener);
-
         sendDrawingButton = ViewUtils.getView(rootView, R.id.tv__send_button);
         sendDrawingButton.setOnClickListener(sketchButtonsOnClickListener);
         sendDrawingButton.setClickable(false);
 
-        undoSketchButton = ViewUtils.getView(rootView, R.id.tv__undo_button);
-        undoSketchButton.setOnClickListener(sketchButtonsOnClickListener);
-        undoSketchButton.setOnLongClickListener(sketchButtonsOnLongClickListener);
-        undoSketchButton.setClickable(false);
+        sketchEditTextView = ViewUtils.getView(rootView, R.id.et__sketch_text);
+        sketchEditTextView.setAlpha(TEXT_ALPHA_INVISIBLE);
+        sketchEditTextView.setVisibility(View.INVISIBLE);
+        sketchEditTextView.setCustomHint(getString(R.string.drawing__text_hint));
+        currentBackgroundColor = getControllerFactory().getAccentColorController().getColor();
+        sketchEditTextView.setBackground(ColorUtils.getTransparentDrawable());
+        sketchEditTextView.setHintFontId(R.string.wire__typeface__medium);
+        sketchEditTextView.setTextFontId(R.string.wire__typeface__regular);
+        sketchEditTextView.setSketchScale(1.0f);
+        sketchEditTextView.setOnTouchListener(sketchEditTextOnTouchListener);
 
         if (savedInstanceState != null) {
             Bitmap savedBitmap = savedInstanceState.getParcelable(SAVED_INSTANCE_BITMAP);
@@ -179,42 +326,64 @@ public class DrawingFragment extends BaseFragment<DrawingFragment.Container> imp
                 // Use saved background image if exists
                 drawingCanvasView.setBackgroundBitmap(savedBitmap);
             } else {
-                setBackgroundBitmap();
+                setBackgroundBitmap(true);
             }
         } else {
-            setBackgroundBitmap();
+            setBackgroundBitmap(true);
         }
 
         return rootView;
     }
 
+    private void hideTip() {
+        if (drawingViewTip.getVisibility() == View.GONE) {
+            return;
+        }
+        drawingViewTip.setVisibility(View.GONE);
+        drawingTipBackground.setVisibility(View.GONE);
+        drawingCanvasView.setOnTouchListener(null);
+    }
+
+
     @Override
     public void onSaveInstanceState(Bundle outState) {
         outState.putParcelable(SAVED_INSTANCE_BITMAP, getBitmapDrawing());
+        assetIntentsManager.onSaveInstanceState(outState);
         super.onSaveInstanceState(outState);
     }
 
-    public void setBackgroundBitmap() {
+    public void setBackgroundBitmap(boolean showHint) {
         if (getActivity() == null || backgroundImage == null) {
             return;
         }
-        drawingViewTip.setText(getResources().getString(R.string.drawing__tip__picture__message));
-        drawingTipBackground.setVisibility(View.VISIBLE);
+
+        if (showHint) {
+            drawingViewTip.setText(getResources().getString(R.string.drawing__tip__picture__message));
+            drawingTipBackground.setVisibility(View.VISIBLE);
+        } else {
+            hideTip();
+        }
         drawingViewTip.setTextColor(getResources().getColor(R.color.drawing__tip__font__color_image));
         cancelLoadHandle();
-        bitmapLoadHandle = backgroundImage.getSingleBitmap(ViewUtils.getOrientationDependentDisplayWidth(getActivity()), new ImageAsset.BitmapCallback() {
+        bitmapLoadHandle = backgroundImage.getSingleBitmap(ViewUtils.getOrientationDependentDisplayWidth(getActivity()), new BitmapCallback() {
             @Override
-            public void onBitmapLoaded(Bitmap bitmap, boolean isPreview) {
-                if (getActivity() == null || drawingCanvasView == null || isPreview) {
+            public void onBitmapLoaded(Bitmap bitmap) {
+                if (getActivity() == null || drawingCanvasView == null) {
                     return;
                 }
                 includeBackgroundImage = true;
                 drawingCanvasView.setBackgroundBitmap(bitmap);
                 cancelLoadHandle();
+
+                if (drawingMethod == IDrawingController.DrawingMethod.EMOJI) {
+                    onEmojiClick();
+                } else if (drawingMethod == IDrawingController.DrawingMethod.TEXT) {
+                    onTextClick();
+                }
             }
 
             @Override
-            public void onBitmapLoadingFailed() {
+            public void onBitmapLoadingFailed(BitmapLoadingFailed reason) {
                 cancelLoadHandle();
             }
         });
@@ -241,7 +410,9 @@ public class DrawingFragment extends BaseFragment<DrawingFragment.Container> imp
         sensorManager.registerListener(shakeEventListener,
                 sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER),
                 SensorManager.SENSOR_DELAY_NORMAL);
-        getControllerFactory().getOrientationController().addOrientationControllerObserver(this);
+        getControllerFactory().getGlobalLayoutController().addKeyboardVisibilityObserver(this);
+        getControllerFactory().getAccentColorController().addAccentColorObserver(this);
+        getControllerFactory().getRequestPermissionsController().addObserver(this);
     }
 
     @Override
@@ -254,9 +425,11 @@ public class DrawingFragment extends BaseFragment<DrawingFragment.Container> imp
 
     @Override
     public void onStop() {
+        getControllerFactory().getAccentColorController().removeAccentColorObserver(this);
+        getControllerFactory().getGlobalLayoutController().removeKeyboardVisibilityObserver(this);
+        getControllerFactory().getRequestPermissionsController().removeObserver(this);
         getStoreFactory().getInAppNotificationStore().setUserSendingPicture(false);
         sensorManager.unregisterListener(shakeEventListener);
-        getControllerFactory().getOrientationController().removeOrientationControllerObserver(this);
         super.onStop();
     }
 
@@ -268,9 +441,65 @@ public class DrawingFragment extends BaseFragment<DrawingFragment.Container> imp
         }
         colorLayout = null;
         sendDrawingButton = null;
-        cancelDrawingButton = null;
         cancelLoadHandle();
         super.onDestroyView();
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        assetIntentsManager.onActivityResult(requestCode, resultCode, data);
+    }
+
+    @Override
+    public void onDataReceived(AssetIntentsManager.IntentType type, Uri uri) {
+        switch (type) {
+            case SKETCH_FROM_GALLERY:
+                drawingMethod = IDrawingController.DrawingMethod.DRAW;
+                sketchEditTextView.setText("");
+                sketchEditTextView.setVisibility(View.GONE);
+                drawingCanvasView.reset();
+                drawingCanvasView.removeBackgroundBitmap();
+                backgroundImage = ImageAssetFactory.getImageAsset(uri);
+                setBackgroundBitmap(false);
+                onSketchClick();
+                break;
+        }
+    }
+
+    @Override
+    public void onCanceled(AssetIntentsManager.IntentType type) {
+
+    }
+
+    @Override
+    public void onFailed(AssetIntentsManager.IntentType type) {
+
+    }
+
+    @Override
+    public void openIntent(Intent intent, AssetIntentsManager.IntentType intentType) {
+        startActivityForResult(intent, intentType.requestCode);
+        getActivity().overridePendingTransition(R.anim.camera_in, R.anim.camera_out);
+    }
+
+    @Override
+    public void onPermissionFailed(AssetIntentsManager.IntentType type) {
+
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, int[] grantResults) {
+        if (assetIntentsManager.onRequestPermissionsResult(requestCode, grantResults)) {
+            return;
+        }
+
+
+        switch (requestCode) {
+            case OPEN_SKETCH_FROM_GALLERY:
+                if (PermissionUtils.verifyPermissions(grantResults)) {
+                    assetIntentsManager.openGalleryForSketch();
+                }
+        }
     }
 
     public void cancelLoadHandle() {
@@ -286,6 +515,10 @@ public class DrawingFragment extends BaseFragment<DrawingFragment.Container> imp
 
     @Override
     public boolean onBackPressed() {
+        if (isShowingKeyboard()) {
+            closeKeyboard();
+            return true;
+        }
         if (drawingCanvasView != null && drawingCanvasView.undo()) {
             return true;
         }
@@ -295,7 +528,8 @@ public class DrawingFragment extends BaseFragment<DrawingFragment.Container> imp
 
     @Override
     public void onScrollWidthChanged(int width) {
-        colorPickerScrollBar.setScrollBarSize(width);
+        // TODO uncomment once AN-4649 is fixed
+        //colorPickerScrollBar.setScrollBarSize(width);
     }
 
     private View.OnClickListener sketchButtonsOnClickListener = new View.OnClickListener() {
@@ -304,43 +538,20 @@ public class DrawingFragment extends BaseFragment<DrawingFragment.Container> imp
             if (drawingCanvasView == null) {
                 return;
             }
-
             switch (v.getId()) {
                 case R.id.tv__send_button:
                     if (!drawingCanvasView.isEmpty()) {
                         getStoreFactory().getConversationStore().sendMessage(getFinalSketchImage());
                         TrackingUtils.onSentSketchMessage(getControllerFactory().getTrackingController(),
-                                                          getStoreFactory().getConversationStore().getCurrentConversation());
+                                                          getStoreFactory().getConversationStore().getCurrentConversation(),
+                                                          drawingDestination);
 
                         getControllerFactory().getDrawingController().hideDrawing(drawingDestination, true);
                     }
                     break;
-                case R.id.tv__cancel_button:
-                    getControllerFactory().getDrawingController().hideDrawing(drawingDestination, false);
-                    break;
-                case R.id.tv__undo_button:
-                    drawingCanvasView.undo();
-                    break;
                 default:
                     //nothing
                     break;
-            }
-        }
-    };
-
-    private View.OnLongClickListener sketchButtonsOnLongClickListener = new View.OnLongClickListener() {
-        @Override
-        public boolean onLongClick(View v) {
-            switch (v.getId()) {
-                case R.id.tv__undo_button:
-                    if (drawingCanvasView == null) {
-                        return true;
-                    }
-                    drawingCanvasView.reset();
-                    return true;
-                default:
-                    //nothing
-                    return false;
             }
         }
     };
@@ -352,12 +563,16 @@ public class DrawingFragment extends BaseFragment<DrawingFragment.Container> imp
             int y;
             int width;
             int height;
-            if (currentConfigOrientation == SquareOrientation.LANDSCAPE_LEFT ||
-                    currentConfigOrientation == SquareOrientation.LANDSCAPE_RIGHT) {
-                x = drawingCanvasView.getTopTrimValue(true);
-                y = 0;
-                width = drawingCanvasView.getBottomTrimValue(true) - x;
-                height = finalBitmap.getHeight();
+            if (drawingCanvasView.isBackgroundImageLandscape()) {
+                x = 0;
+                y = drawingCanvasView.getTopTrimValue(true);
+                width = finalBitmap.getWidth();
+                height = drawingCanvasView.getBottomTrimValue(true) - y;
+
+                if (height < drawingCanvasView.getLandscapeBackgroundBitmapHeight()) {
+                    y = drawingCanvasView.getBackgroundBitmapTop();
+                    height = drawingCanvasView.getLandscapeBackgroundBitmapHeight();
+                }
             } else {
                 x = 0;
                 y = drawingCanvasView.getTopTrimValue(false);
@@ -370,124 +585,28 @@ public class DrawingFragment extends BaseFragment<DrawingFragment.Container> imp
             ExceptionHandler.saveException(outOfMemoryError, null);
         }
 
-        return ImageAssetFactory.getImageAsset(finalBitmap, calculateFinalRotation());
-    }
-
-    private int calculateFinalRotation() {
-        int rotation = ExifInterface.ORIENTATION_UNDEFINED;
-        switch (currentConfigOrientation) {
-            case NONE:
-                rotation = ExifInterface.ORIENTATION_NORMAL;
-                break;
-            case PORTRAIT_STRAIGHT:
-                rotation = ExifInterface.ORIENTATION_NORMAL;
-                break;
-            case PORTRAIT_UPSIDE_DOWN:
-                rotation = ExifInterface.ORIENTATION_ROTATE_180;
-                break;
-            case LANDSCAPE_LEFT:
-                rotation = ExifInterface.ORIENTATION_ROTATE_270;
-                break;
-            case LANDSCAPE_RIGHT:
-                rotation = ExifInterface.ORIENTATION_ROTATE_90;
-                break;
-        }
-        return rotation;
+        return ImageAssetFactory.getImageAsset(finalBitmap, ExifInterface.ORIENTATION_NORMAL);
     }
 
     @Override
     public void onScrollChanged() {
-        if (colorPickerScrollBar == null || colorLayout == null) {
-            return;
-        }
-        colorPickerScrollBar.setLeftX(colorPickerScrollContainer.getScrollX());
+        // TODO uncomment once AN-4649 is fixed
+        //if (colorPickerScrollBar == null || colorLayout == null) {
+        //    return;
+        //}
+        //colorPickerScrollBar.setLeftX(colorPickerScrollContainer.getScrollX());
     }
 
     @Override
     public void onAccentColorHasChanged(Object sender, int color) {
-        colorPickerScrollBar.setBackgroundColor(color);
-    }
-
-    @Override
-    public void onOrientationHasChanged(SquareOrientation squareOrientation) {
-        setConfigOrientation(squareOrientation);
-        drawingCanvasView.setConfigOrientation(squareOrientation);
-    }
-
-    public void setConfigOrientation(SquareOrientation configOrientation) {
-        if (skipSetOrientation(configOrientation)) {
-            return;
+        // TODO uncomment once AN-4649 is fixed
+        //colorPickerScrollBar.setBackgroundColor(color);
+        if (drawingCanvasView.isEmpty()) {
+            int accentColorWithAlpha = ColorUtils.injectAlpha(SEND_BUTTON_DISABLED_ALPHA, getControllerFactory().getAccentColorController().getColor());
+            sendDrawingButton.setSolidBackgroundColor(accentColorWithAlpha);
+        } else {
+            sendDrawingButton.setSolidBackgroundColor(getControllerFactory().getAccentColorController().getColor());
         }
-
-        int currentOrientation = (int) cancelDrawingButton.getRotation();
-        int rotation = 0;
-
-        switch (configOrientation) {
-            case NONE:
-                break;
-            case PORTRAIT_STRAIGHT:
-                rotation = 0;
-                break;
-            case PORTRAIT_UPSIDE_DOWN:
-                rotation = 2 * currentOrientation;
-                break;
-            case LANDSCAPE_LEFT:
-                if (currentOrientation == ROTATION_REVERSE) {
-                    sendDrawingButton.setRotation(ROTATION_FLIP);
-                    cancelDrawingButton.setRotation(ROTATION_FLIP);
-                    undoSketchButton.setRotation(ROTATION_FLIP);
-                }
-                rotation = ROTATION_FORWARD_90;
-                break;
-            case LANDSCAPE_RIGHT:
-                if (currentOrientation == ROTATION_FLIP) {
-                    sendDrawingButton.setRotation(ROTATION_REVERSE);
-                    cancelDrawingButton.setRotation(ROTATION_REVERSE);
-                    undoSketchButton.setRotation(ROTATION_REVERSE);
-                }
-                rotation = ROTATION_BACKWARD_90;
-                break;
-        }
-
-        currentConfigOrientation = configOrientation;
-
-        sendDrawingButton.animate()
-                .rotation(rotation)
-                .start();
-
-        cancelDrawingButton.animate()
-                .rotation(rotation)
-                .start();
-
-        undoSketchButton.animate()
-                .rotation(rotation)
-                .start();
-    }
-
-    //reasons to not set the orientation (landscape photo etc)
-    private boolean skipSetOrientation(SquareOrientation configOrientation) {
-        if (configOrientation.equals(currentConfigOrientation) ||
-                configOrientation == SquareOrientation.PORTRAIT_UPSIDE_DOWN ||
-                sendDrawingButton == null ||
-                cancelDrawingButton == null ||
-                undoSketchButton == null) {
-            return true;
-        }
-
-        if (!includeBackgroundImage) {
-            return false;
-        }
-
-        if ((configOrientation == SquareOrientation.LANDSCAPE_RIGHT || configOrientation == SquareOrientation.LANDSCAPE_LEFT) &&
-            !drawingCanvasView.isBackgroundImageLandscape()) {
-            return true;
-        }
-
-        if (configOrientation == SquareOrientation.PORTRAIT_STRAIGHT &&
-            drawingCanvasView.isBackgroundImageLandscape()) {
-            return true;
-        }
-        return false;
     }
 
     @Override
@@ -497,33 +616,200 @@ public class DrawingFragment extends BaseFragment<DrawingFragment.Container> imp
         }
         drawingCanvasView.setDrawingColor(color);
         drawingCanvasView.setStrokeSize(strokeSize);
+        currentBackgroundColor = color;
+        sketchEditTextView.setBackground(ColorUtils.getRoundedTextBoxBackground(getContext(), color, sketchEditTextView.getHeight()));
+        if (MathUtils.floatEqual(sketchEditTextView.getAlpha(), TEXT_ALPHA_INVISIBLE)) {
+            drawSketchEditText();
+        }
+    }
+
+    public void onEmojiClick() {
+        final EmojiBottomSheetDialog dialog = new EmojiBottomSheetDialog(getContext(),
+                                                                         currentEmojiSize,
+                                                                         new EmojiBottomSheetDialog.EmojiDialogListener() {
+                                                                             @Override
+                                                                             public void onEmojiSelected(String emoji, EmojiSize emojiSize) {
+                                                                                 actionButtonEmoji.setTextColor(getControllerFactory().getAccentColorController().getColor());
+                                                                                 actionButtonSketch.setTextColor(defaultTextColor);
+                                                                                 actionButtonText.setTextColor(defaultTextColor);
+                                                                                 drawingCanvasView.setEmoji(emoji, emojiSize.getEmojiSize(getContext()));
+                                                                                 currentEmojiSize = emojiSize;
+                                                                                 getControllerFactory().getUserPreferencesController().addRecentEmoji(emoji);
+                                                                             }
+                                                                         },
+                                                                         getControllerFactory().getUserPreferencesController().getRecentEmojis(),
+                                                                         getControllerFactory().getUserPreferencesController().getUnsupportedEmojis());
+        dialog.show();
+    }
+
+    private void closeKeyboard() {
+        drawSketchEditText();
+        KeyboardUtils.hideKeyboard(getActivity());
+    }
+
+    private void showKeyboard() {
+        drawingCanvasView.hideText();
+        sketchEditTextView.setCursorVisible(true);
+        sketchEditTextView.requestFocus();
+        KeyboardUtils.showKeyboard(getActivity());
+    }
+
+    private boolean isShowingKeyboard() {
+        return sketchEditTextView.getVisibility() == View.VISIBLE &&
+            Float.compare(sketchEditTextView.getAlpha(), TEXT_ALPHA_VISIBLE) == 0 &&
+            KeyboardUtils.isKeyboardVisible(getContext());
+    }
+
+    private void onSketchClick() {
+        drawingCanvasView.setCurrentMode(DrawingCanvasView.Mode.SKETCH);
+        actionButtonText.setTextColor(defaultTextColor);
+        actionButtonEmoji.setTextColor(defaultTextColor);
+        actionButtonSketch.setTextColor(getControllerFactory().getAccentColorController().getColor());
+    }
+
+    private void onTextClick() {
+        actionButtonText.setTextColor(getControllerFactory().getAccentColorController().getColor());
+        actionButtonEmoji.setTextColor(defaultTextColor);
+        actionButtonSketch.setTextColor(defaultTextColor);
+        drawingCanvasView.setCurrentMode(DrawingCanvasView.Mode.TEXT);
+        if (isShowingKeyboard()) {
+            closeKeyboard();
+        } else {
+            if (sketchEditTextView.getVisibility() != View.VISIBLE) {
+                shouldOpenEditText = true;
+                sketchEditTextView.setAlpha(TEXT_ALPHA_INVISIBLE);
+                sketchEditTextView.setBackground(ColorUtils.getTransparentDrawable());
+            }
+            sketchEditTextView.setVisibility(View.VISIBLE);
+            showKeyboard();
+            hideTip();
+        }
     }
 
     @Override
     public void drawingAdded() {
-        undoSketchButton.setTextColor(getResources().getColor(R.color.drawing__icon__enabled_color));
-        undoSketchButton.setClickable(true);
-        sendDrawingButton.setTextColor(getResources().getColor(R.color.drawing__icon__enabled_color));
+        if (isShowingKeyboard()) {
+            closeKeyboard();
+        }
+        toolbar.setNavigationIcon(R.drawable.toolbar_action_undo);
+        sendDrawingButton.setSolidBackgroundColor(getControllerFactory().getAccentColorController().getColor());
         sendDrawingButton.setClickable(true);
     }
 
     @Override
     public void drawingCleared() {
-        undoSketchButton.setTextColor(getResources().getColor(R.color.drawing__icon__disabled_color));
-        undoSketchButton.setClickable(false);
-        sendDrawingButton.setTextColor(getResources().getColor(R.color.drawing__icon__disabled_color));
+        toolbar.setNavigationIcon(R.drawable.toolbar_action_undo_disabled);
+        int colorWithAlpha = ColorUtils.injectAlpha(SEND_BUTTON_DISABLED_ALPHA, getControllerFactory().getAccentColorController().getColor());
+        sendDrawingButton.setSolidBackgroundColor(colorWithAlpha);
         sendDrawingButton.setClickable(false);
-    }
-
-    @Override
-    public void setRotation(int rotation) {
-        setConfigOrientation(SquareOrientation.getOrientation(rotation, getActivity()));
-        drawingViewTip.setRotation(-rotation);
     }
 
     @Override
     public void reserveBitmapMemory(int width, int height) {
         MemoryImageCache.reserveImageMemory(width, height);
+    }
+
+    @Override
+    public void onScaleChanged(float scale) {
+        sketchEditTextView.setSketchScale(scale);
+        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) sketchEditTextView.getLayoutParams();
+        clampSketchEditBoxPosition(params);
+        sketchEditTextView.setLayoutParams(params);
+    }
+
+    @Override
+    public void onScaleStart() {
+        drawingCanvasView.hideText();
+        sketchEditTextView.setAlpha(TEXT_ALPHA_VISIBLE);
+    }
+
+    @Override
+    public void onScaleEnd() {
+        closeKeyboard();
+    }
+
+    @Override
+    public void onTextChanged(String text, int x, int y, float scale) {
+        ViewUtils.setMarginLeft(sketchEditTextView, x);
+        ViewUtils.setMarginTop(sketchEditTextView, y);
+        sketchEditTextView.setSketchScale(scale);
+        sketchEditTextView.setText(text);
+        sketchEditTextView.setSelection(text.length());
+    }
+
+    @Override
+    public void onTextRemoved() {
+        sketchEditTextView.setText("");
+        sketchEditTextView.removeListener(sketchEditTextListener);
+        sketchEditTextView.setVisibility(View.INVISIBLE);
+    }
+
+    @Override
+    public void onKeyboardVisibilityChanged(boolean keyboardIsVisible, int keyboardHeight, View currentFocus) {
+        if (!keyboardIsVisible) {
+            closeKeyboard();
+        }
+        if (shouldOpenEditText) {
+            shouldOpenEditText = false;
+            FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) sketchEditTextView.getLayoutParams();
+            params.leftMargin = (((ViewGroup) sketchEditTextView.getParent()).getMeasuredWidth() - sketchEditTextView.getMeasuredWidth()) / 2;
+            params.topMargin = ((ViewGroup) sketchEditTextView.getParent()).getMeasuredHeight() - keyboardHeight - sketchEditTextView.getMeasuredHeight();
+            sketchEditTextView.setLayoutParams(params);
+
+            //Posted so that the user doesn't see the previous location
+            getView().post(new Runnable() {
+                @Override
+                public void run() {
+                    sketchEditTextView.setBackground(ColorUtils.getRoundedTextBoxBackground(getContext(), currentBackgroundColor, sketchEditTextView.getMeasuredHeight()));
+                    sketchEditTextView.setAlpha(TEXT_ALPHA_VISIBLE);
+                    sketchEditTextView.addListener(sketchEditTextListener);
+                }
+            });
+        } else {
+            sketchEditTextView.setAlpha(TEXT_ALPHA_VISIBLE);
+        }
+
+    }
+
+    private void drawSketchEditText() {
+        if (sketchEditTextView.getVisibility() == View.VISIBLE) {
+            sketchEditTextView.setAlpha(TEXT_ALPHA_VISIBLE);
+            sketchEditTextView.setCursorVisible(false);
+            //This has to be on a post otherwise the setAlpha and setCursor won't be noticeable in the drawing cache
+            getView().post(new Runnable() {
+                @Override
+                public void run() {
+                    sketchEditTextView.setDrawingCacheEnabled(true);
+                    Bitmap bitmapDrawingCache = sketchEditTextView.getDrawingCache();
+                    if (bitmapDrawingCache != null) {
+                        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) sketchEditTextView.getLayoutParams();
+                        drawingCanvasView.showText();
+                        drawingCanvasView.drawTextBitmap(
+                            bitmapDrawingCache.copy(bitmapDrawingCache.getConfig(), true),
+                            params.leftMargin,
+                            params.topMargin,
+                            sketchEditTextView.getText().toString(),
+                            sketchEditTextView.getSketchScale());
+                    } else {
+                        drawingCanvasView.drawTextBitmap(null, 0, 0, "", 1.0f);
+                    }
+                    sketchEditTextView.setDrawingCacheEnabled(false);
+                    sketchEditTextView.setAlpha(TEXT_ALPHA_INVISIBLE);
+                }
+            });
+        }
+    }
+
+    private void clampSketchEditBoxPosition(FrameLayout.LayoutParams params) {
+        int sketchWidth = (((ViewGroup) sketchEditTextView.getParent()).getMeasuredWidth());
+        int sketchHeight = (((ViewGroup) sketchEditTextView.getParent()).getMeasuredHeight());
+        int textWidth = sketchEditTextView.getMeasuredWidth();
+        int textHeight = sketchEditTextView.getMeasuredHeight();
+
+        params.leftMargin = Math.min(params.leftMargin, sketchWidth - textWidth / 2);
+        params.topMargin = Math.min(params.topMargin, sketchHeight - textHeight / 2);
+        params.leftMargin = Math.max(params.leftMargin, -textWidth / 2);
+        params.topMargin = Math.max(params.topMargin, -textHeight / 2);
     }
 
     public interface Container { }

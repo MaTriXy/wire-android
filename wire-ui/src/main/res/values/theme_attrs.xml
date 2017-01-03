@@ -23,6 +23,7 @@
     <!-- messageStream -->
     <attr name="messageStreamMessage" format="reference" />
     <attr name="messageStreamSeparatorName" format="reference" />
+    <attr name="messageStreamSeparatorRecalled" format="reference" />
     <attr name="messageStreamTimestamp" format="reference" />
     <attr name="messageStreamTimestampSmall" format="reference" />
     <attr name="messageStreamSubtitle" format="reference" />
@@ -43,6 +44,7 @@
 
     <!-- Conversation Toolbar -->
     <attr name="conversationToolbar" format="reference" />
+    <attr name="conversationToolbarNoDivider" format="reference" />
     <attr name="conversationToolbarBackground" format="reference" />
     <attr name="conversationToolbarIconVideo" format="reference" />
     <attr name="conversationToolbarIconCall" format="reference" />
@@ -81,10 +83,12 @@
     <attr name="circularIconButtonGreen" format="reference" />
     <attr name="circularIconButtonRed" format="reference" />
     <attr name="wireBackground" format="reference" />
+    <attr name="wireBackgroundAsTextColor" format="reference" />
     <attr name="strongBackground" format="reference" />
     <attr name="wireDivider" format="reference" />
     <attr name="tabIndicatorLabel" format="reference" />
     <attr name="wirePrimaryTextColor" format="color" />
+    <attr name="wireSecondaryTextColor" format="color" />
     <attr name="wirePrimaryTextColorReverted" format="color" />
 
     <!-- StartUI error labels -->
@@ -95,6 +99,7 @@
     <attr name="startUiCloseButton" format="reference" />
 
     <attr name="startUiUserRowLabel" format="reference" />
+    <attr name="startUiUserRowSubLabel" format="reference" />
     <attr name="startUiHeaderRowLabel" format="reference" />
 
     <!-- Media Player -->
@@ -125,5 +130,13 @@
     <attr name="giphyError" format="reference" />
     <attr name="giphyConversation" format="reference" />
     <attr name="giphyKeyword" format="reference" />
+
+    <!-- Typing indicator -->
+    <attr name="typingIndicatorBox" format="reference" />
+    <attr name="typingIndicatorText" format="reference" />
+
+    <!-- sketch -->
+    <attr name="sketchToolbar" format="reference" />
+
 
 </resources>

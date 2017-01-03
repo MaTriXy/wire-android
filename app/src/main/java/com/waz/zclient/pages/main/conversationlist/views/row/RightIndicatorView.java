@@ -23,10 +23,13 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 import com.waz.api.IConversation;
+import com.waz.api.NetworkMode;
 import com.waz.zclient.R;
 import com.waz.zclient.controllers.mediaplayer.MediaPlayerState;
 import com.waz.zclient.controllers.streammediaplayer.IStreamMediaPlayerController;
+import com.waz.zclient.core.stores.network.DefaultNetworkAction;
 import com.waz.zclient.core.stores.network.INetworkStore;
 import com.waz.zclient.ui.text.CircleIconButton;
 import com.waz.zclient.utils.ViewUtils;
@@ -35,19 +38,18 @@ public class RightIndicatorView extends LinearLayout {
     private final int initialPadding;
     // Media player control indicator
     private CircleIconButton mediaControlView;
-    // muteButton and microphone indicator
+    private TextView joinCallView;
     public CircleIconButton muteButton;
+
     private IConversation conversation;
     private IStreamMediaPlayerController streamMediaPlayerController;
     private INetworkStore networkStore;
 
     private boolean isMediaControlVisible;
     private boolean isMuteVisible;
+    private boolean isJoinCallVisible;
 
-    public void setConversation(final IConversation conversation) {
-        this.conversation = conversation;
-        updated();
-    }
+    private ConversationActionCallback callback;
 
     /**
      * Creates the view.
@@ -70,6 +72,15 @@ public class RightIndicatorView extends LinearLayout {
         muteButton.setSelectedTextColor(getResources().getColor(R.color.calling__ongoing__background__color));
         muteButton.setShowCircleBorder(false);
 
+        joinCallView = ViewUtils.getView(this, R.id.ttv__conv_list__join_call);
+        joinCallView.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (conversation != null && conversation.hasUnjoinedCall() && callback != null) {
+                    callback.startCall(conversation);
+                }
+            }
+        });
         mediaControlView = ViewUtils.getView(this, R.id.tv_conv_list_media_player);
         mediaControlView.setText(R.string.glyph__pause);
         mediaControlView.setSelectedTextColor(getResources().getColor(R.color.calling__ongoing__background__color));
@@ -84,22 +95,33 @@ public class RightIndicatorView extends LinearLayout {
                 if (!streamMediaPlayerController.isSelectedConversation(conversation.getId())) {
                     return;
                 }
-                if (!networkStore.hasInternetConnection()) {
-                    networkStore.notifyNetworkAccessFailed();
-                    return;
-                }
 
-                final MediaPlayerState mediaPlayerState = streamMediaPlayerController.getMediaPlayerState(conversation.getId());
-                if (mediaPlayerState.isPauseControl()) {
-                    streamMediaPlayerController.pause(conversation.getId());
-                } else if (mediaPlayerState.isPlayControl()) {
-                    streamMediaPlayerController.play(conversation.getId());
-                }
+                networkStore.doIfHasInternetOrNotifyUser(new DefaultNetworkAction() {
+                    @Override
+                    public void execute(NetworkMode networkMode) {
+                        final MediaPlayerState mediaPlayerState = streamMediaPlayerController.getMediaPlayerState(conversation.getId());
+                        if (mediaPlayerState.isPauseControl()) {
+                            streamMediaPlayerController.pause(conversation.getId());
+                        } else if (mediaPlayerState.isPlayControl()) {
+                            streamMediaPlayerController.play(conversation.getId());
+                        }
+                    }
+                });
             }
         });
     }
 
+    public void setCallback(ConversationActionCallback callback) {
+        this.callback = callback;
+    }
+
+    public void setConversation(final IConversation conversation) {
+        this.conversation = conversation;
+        updated();
+    }
+
     public void updated() {
+        isJoinCallVisible = updateJoinCallIndicator();
         isMuteVisible = updateMuteIndicator();
         isMediaControlVisible = updateMediaPlayerIndicator();
     }
@@ -131,16 +153,9 @@ public class RightIndicatorView extends LinearLayout {
     }
 
     private boolean updateMuteIndicator() {
-        if (conversation.hasVoiceChannel()) {
-            if (conversation.getVoiceChannel().isSilenced() || conversation.hasUnjoinedCall()) {
-                muteButton.setVisibility(View.GONE);
-                return false;
-            } else {
-                muteButton.setVisibility(View.VISIBLE);
-                muteButton.setText(R.string.glyph__microphone_off);
-                muteButton.setSelected(conversation.isVoiceChannelMuted());
-                return true;
-            }
+        if (isJoinCallVisible) {
+            muteButton.setVisibility(View.GONE);
+            return false;
         }
 
         muteButton.setSelected(false);
@@ -152,6 +167,16 @@ public class RightIndicatorView extends LinearLayout {
             muteButton.setVisibility(View.GONE);
             return false;
         }
+    }
+
+    private boolean updateJoinCallIndicator() {
+        boolean shouldShowJoinCall = conversation.hasUnjoinedCall();
+        if (shouldShowJoinCall) {
+            joinCallView.setVisibility(VISIBLE);
+        } else {
+            joinCallView.setVisibility(GONE);
+        }
+        return shouldShowJoinCall;
     }
 
     public void setStreamMediaPlayerController(IStreamMediaPlayerController streamMediaPlayer) {
@@ -169,10 +194,14 @@ public class RightIndicatorView extends LinearLayout {
             totalPadding += getResources().getDimensionPixelSize(R.dimen.conversation_list__right_icon_width);
         }
 
-        if (isMuteVisible) {
+        if (isJoinCallVisible || isMuteVisible) {
             totalPadding += getResources().getDimensionPixelSize(R.dimen.conversation_list__right_icon_width);
         }
 
         return totalPadding;
+    }
+
+    public interface ConversationActionCallback {
+        void startCall(IConversation conversation);
     }
 }

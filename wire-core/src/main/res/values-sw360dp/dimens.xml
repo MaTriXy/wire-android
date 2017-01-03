@@ -21,5 +21,4 @@
 <resources>
     <dimen name="profile__image__width">@dimen/profile__image__width_regular</dimen>
     <dimen name="profile__image__height">@dimen/profile__image__height_regular</dimen>
-    <dimen name="participants__chathead__width">88dp</dimen>
 </resources>

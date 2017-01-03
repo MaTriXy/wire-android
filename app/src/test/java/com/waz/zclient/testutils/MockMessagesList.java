@@ -20,6 +20,7 @@ package com.waz.zclient.testutils;
 import android.annotation.SuppressLint;
 import android.os.Parcel;
 import com.waz.api.Asset;
+import com.waz.api.EphemeralExpiration;
 import com.waz.api.IConversation;
 import com.waz.api.ImageAsset;
 import com.waz.api.Message;
@@ -182,6 +183,11 @@ public class MockMessagesList extends MockObservable implements MessagesList {
         }
 
         @Override
+        public Instant getEditTime() {
+            return null;
+        }
+
+        @Override
         public boolean isDeleted() {
             return false;
         }
@@ -197,17 +203,27 @@ public class MockMessagesList extends MockObservable implements MessagesList {
         }
 
         @Override
+        public boolean isEdited() {
+            return false;
+        }
+
+        @Override
         public boolean isCreateConversation() {
             return false;
         }
-
+        
         @Override
-        public boolean isOtr() {
+        public boolean isFirstMessage() {
             return false;
         }
 
         @Override
-        public boolean isFirstMessage() {
+        public boolean isLastMessageFromSelf() {
+            return false;
+        }
+
+        @Override
+        public boolean isLastMessageFromOther() {
             return false;
         }
 
@@ -247,12 +263,42 @@ public class MockMessagesList extends MockObservable implements MessagesList {
         }
 
         @Override
+        public boolean isEphemeral() {
+            return false;
+        }
+
+        @Override
+        public boolean isExpired() {
+            return false;
+        }
+
+        @Override
+        public EphemeralExpiration getEphemeralExpiration() {
+            return null;
+        }
+
+        @Override
+        public Instant getExpirationTime() {
+            return null;
+        }
+
+        @Override
         public void retry() {
 
         }
 
         @Override
         public void delete() {
+
+        }
+
+        @Override
+        public void recall() {
+
+        }
+
+        @Override
+        public void update(MessageContent.Text content) {
 
         }
 

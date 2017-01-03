@@ -17,10 +17,14 @@
  */
 package com.waz.zclient.pages.main;
 
+import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.content.res.Configuration;
+import android.net.Uri;
 import android.os.Bundle;
+import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
+import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentTransaction;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -41,25 +45,31 @@ import com.waz.zclient.pages.main.backgroundmain.views.BackgroundFrameLayout;
 import com.waz.zclient.pages.main.conversation.SingleImageFragment;
 import com.waz.zclient.pages.main.conversation.SingleImageMessageFragment;
 import com.waz.zclient.pages.main.conversation.SingleImageUserFragment;
+import com.waz.zclient.pages.main.conversation.VideoPlayerFragment;
 import com.waz.zclient.pages.main.inappnotification.InAppNotificationFragment;
 import com.waz.zclient.utils.ViewUtils;
 import com.waz.zclient.views.menus.ConfirmationMenu;
 
 
 public class MainTabletFragment extends BaseFragment<MainTabletFragment.Container> implements
-        OnBackPressedListener,
-        InAppNotificationFragment.Container,
-        RootFragment.Container,
-        SingleImageObserver,
-        SingleImageFragment.Container,
-        ConfirmationObserver,
-        AccentColorObserver {
+                                                                                   OnBackPressedListener,
+                                                                                   InAppNotificationFragment.Container,
+                                                                                   RootFragment.Container,
+                                                                                   SingleImageObserver,
+                                                                                   SingleImageFragment.Container,
+                                                                                   ConfirmationObserver,
+                                                                                   AccentColorObserver {
 
     public static final String TAG = MainTabletFragment.class.getName();
     private static final String ARG_LOCK_EXPANDED = "ARG_LOCK_EXPANDED";
 
     private ConfirmationMenu confirmationMenu;
     private BackgroundFrameLayout backgroundLayout;
+
+    @Override
+    public void onViewCreated(View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+    }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////
     //
@@ -69,6 +79,7 @@ public class MainTabletFragment extends BaseFragment<MainTabletFragment.Containe
 
 
     @Override
+    @SuppressLint("MissingSuperCall")
     public void onConfigurationChanged(Configuration newConfig) {
         confirmationMenu.adjustLayout();
     }
@@ -208,6 +219,23 @@ public class MainTabletFragment extends BaseFragment<MainTabletFragment.Containe
     @Override
     public void updateSingleImageReferences() {
 
+    }
+
+    @Override
+    public void onShowVideo(Uri uri) {
+        getChildFragmentManager().beginTransaction()
+                                 .add(R.id.fl__overlay_container,
+                                      VideoPlayerFragment.newInstance(uri),
+                                      VideoPlayerFragment.TAG)
+                                 .addToBackStack(VideoPlayerFragment.TAG)
+                                 .commit();
+        getControllerFactory().getNavigationController().setRightPage(Page.SINGLE_MESSAGE, TAG);
+    }
+
+    @Override
+    public void onHideVideo() {
+        getChildFragmentManager().popBackStackImmediate(VideoPlayerFragment.TAG,
+                                                        FragmentManager.POP_BACK_STACK_INCLUSIVE);
     }
 
     @Override

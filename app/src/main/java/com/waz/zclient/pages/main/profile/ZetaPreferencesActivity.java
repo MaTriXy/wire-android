@@ -34,6 +34,7 @@ import android.widget.Toast;
 import com.waz.api.ConversationsList;
 import com.waz.api.IConversation;
 import com.waz.api.ImageAsset;
+import com.waz.api.NetworkMode;
 import com.waz.api.Self;
 import com.waz.api.SyncState;
 import com.waz.api.Verification;
@@ -51,7 +52,6 @@ import com.waz.zclient.core.stores.network.NetworkAction;
 import com.waz.zclient.core.stores.profile.ProfileStoreObserver;
 import com.waz.zclient.pages.main.profile.camera.CameraContext;
 import com.waz.zclient.pages.main.profile.camera.CameraFragment;
-import com.waz.zclient.pages.main.profile.camera.CameraType;
 import com.waz.zclient.pages.main.profile.preferences.AboutPreferences;
 import com.waz.zclient.pages.main.profile.preferences.AccountPreferences;
 import com.waz.zclient.pages.main.profile.preferences.AdvancedPreferences;
@@ -80,10 +80,10 @@ public class ZetaPreferencesActivity extends BasePreferenceActivity implements A
                                                                                ProfileStoreObserver,
                                                                                AccentColorObserver,
                                                                                CameraFragment.Container {
-    public static final String TAG = ZetaPreferencesActivity.class.getSimpleName();
     public static final String SHOW_SPOTIFY_LOGIN = "SHOW_SPOTIFY_LOGIN";
     public static final String SHOW_OTR_DEVICES = "SHOW_OTR_DEVICES";
     public static final String SHOW_ACCOUNT = "SHOW_ACCOUNT";
+    public static final String SHOW_USERNAME_EDIT = "SHOW_USERNAME_EDIT";
 
     public static Intent getDefaultIntent(Context context) {
         return new Intent(context, ZetaPreferencesActivity.class);
@@ -101,8 +101,14 @@ public class ZetaPreferencesActivity extends BasePreferenceActivity implements A
         return intent;
     }
 
+    public static Intent getUsernameEditPreferencesIntent(Context context) {
+        Intent intent = getDefaultIntent(context);
+        intent.putExtra(SHOW_USERNAME_EDIT, true);
+        return intent;
+    }
+
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         if (LayoutSpec.isPhone(this)) {
@@ -137,7 +143,7 @@ public class ZetaPreferencesActivity extends BasePreferenceActivity implements A
     }
 
     @Override
-    protected void onStart() {
+    public void onStart() {
         super.onStart();
         getStoreFactory().getZMessagingApiStore().addApiObserver(this);
         getStoreFactory().getConversationStore().addConversationStoreObserver(this);
@@ -147,7 +153,7 @@ public class ZetaPreferencesActivity extends BasePreferenceActivity implements A
     }
 
     @Override
-    protected void onStop() {
+    public void onStop() {
         getControllerFactory().getCameraController().removeCameraActionObserver(this);
         getStoreFactory().getProfileStore().removeProfileStoreObserver(this);
         getControllerFactory().getAccentColorController().removeAccentColorObserver(this);
@@ -297,6 +303,7 @@ public class ZetaPreferencesActivity extends BasePreferenceActivity implements A
         preferenceScreen.getExtras().remove(ZetaPreferencesActivity.SHOW_SPOTIFY_LOGIN);
         preferenceScreen.getExtras().remove(ZetaPreferencesActivity.SHOW_OTR_DEVICES);
         preferenceScreen.getExtras().remove(ZetaPreferencesActivity.SHOW_ACCOUNT);
+        preferenceScreen.getExtras().remove(ZetaPreferencesActivity.SHOW_USERNAME_EDIT);
     }
 
     @Override
@@ -304,9 +311,9 @@ public class ZetaPreferencesActivity extends BasePreferenceActivity implements A
         if (cameraContext != CameraContext.SETTINGS) {
             return;
         }
-        getStoreFactory().getNetworkStore().doIfNetwork(new NetworkAction() {
+        getStoreFactory().getNetworkStore().doIfHasInternetOrNotifyUser(new NetworkAction() {
             @Override
-            public void execute() {
+            public void execute(NetworkMode networkMode) {
                 getStoreFactory().getProfileStore().setUserPicture(imageAsset);
                 getControllerFactory().getBackgroundController().setImageAsset(imageAsset);
                 getControllerFactory().getTrackingController().tagEvent(new ChangedProfilePictureEvent());
@@ -323,34 +330,6 @@ public class ZetaPreferencesActivity extends BasePreferenceActivity implements A
         });
 
         getSupportFragmentManager().popBackStack(CameraFragment.TAG, FragmentManager.POP_BACK_STACK_INCLUSIVE);
-    }
-
-    @Override
-    public void onDeleteImage(CameraContext cameraContext) {
-        if (cameraContext != CameraContext.SETTINGS) {
-            return;
-        }
-        getStoreFactory().getNetworkStore().doIfNetwork(new NetworkAction() {
-            @Override
-            public void execute() {
-                getStoreFactory().getProfileStore().deleteImage();
-            }
-
-            @Override
-            public void onNoNetwork() {
-                ViewUtils.showAlertDialog(ZetaPreferencesActivity.this,
-                                          R.string.alert_dialog__no_network__header,
-                                          R.string.profile_pic__no_network__message,
-                                          R.string.alert_dialog__confirmation,
-                                          null, true);
-            }
-        });
-
-        getSupportFragmentManager().popBackStack(CameraFragment.TAG, FragmentManager.POP_BACK_STACK_INCLUSIVE);
-    }
-
-    @Override
-    public void onCameraTypeChanged(CameraType cameraType, CameraContext cameraContext) {
     }
 
     @Override
@@ -375,5 +354,9 @@ public class ZetaPreferencesActivity extends BasePreferenceActivity implements A
     @Override
     public void onCloseCamera(CameraContext cameraContext) {
         getSupportFragmentManager().popBackStack(CameraFragment.TAG, FragmentManager.POP_BACK_STACK_INCLUSIVE);
+    }
+
+    @Override
+    public void onMyUsernameHasChanged(String myUsername) {
     }
 }

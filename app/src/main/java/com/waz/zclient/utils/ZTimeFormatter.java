@@ -23,6 +23,7 @@ import android.support.annotation.Nullable;
 import android.text.format.DateFormat;
 import com.waz.zclient.R;
 import org.threeten.bp.Duration;
+import org.threeten.bp.Instant;
 import org.threeten.bp.LocalDateTime;
 import org.threeten.bp.ZoneId;
 import org.threeten.bp.format.DateTimeFormatter;
@@ -60,22 +61,16 @@ public class ZTimeFormatter {
         return DateTimeFormatter.ofPattern(pattern).format(then.atZone(timeZone));
     }
 
-    public static String getSingleMessageTime(@Nullable Resources resources, LocalDateTime date, boolean is24HourFormat, ZoneId timeZone) {
-        if (resources == null) {
-            return "";
-        }
-        String time = getTimeFormatString(resources, is24HourFormat);
-
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern(resources.getString(R.string.timestamp_pattern__single_message, time));
-        return formatter.format(date.atZone(timeZone));
-    }
-
     public static String getSingleMessageTime(Context context, Date date) {
         boolean is24HourFormat = DateFormat.is24HourFormat(context);
-        return ZTimeFormatter.getSingleMessageTime(context.getResources(),
-                                                   DateConvertUtils.asLocalDateTime(date),
-                                                   is24HourFormat,
-                                                   ZoneId.systemDefault());
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern(getTimeFormatString(context.getResources(), is24HourFormat));
+        return formatter.format(DateConvertUtils.asLocalDateTime(date).atZone(ZoneId.systemDefault()));
+    }
+
+    public static String getCurrentWeek(Context context) {
+        String pattern = context.getResources().getString(R.string.timestamp_pattern__week);
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern(pattern);
+        return formatter.format(DateConvertUtils.asLocalDateTime(Instant.now()).atZone(ZoneId.systemDefault()));
     }
 
     private static String getTimeFormatString(@Nullable Resources resources, boolean is24HourFormat) {

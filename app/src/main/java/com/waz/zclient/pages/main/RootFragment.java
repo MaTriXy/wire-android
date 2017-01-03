@@ -41,16 +41,19 @@ import com.waz.api.SyncState;
 import com.waz.api.User;
 import com.waz.api.UsersList;
 import com.waz.api.Verification;
+import com.waz.api.Message;
 import com.waz.zclient.OnBackPressedListener;
 import com.waz.zclient.R;
 import com.waz.zclient.controllers.drawing.DrawingController;
 import com.waz.zclient.controllers.drawing.DrawingObserver;
+import com.waz.zclient.controllers.drawing.IDrawingController;
 import com.waz.zclient.controllers.giphy.GiphyObserver;
 import com.waz.zclient.controllers.location.LocationObserver;
 import com.waz.zclient.controllers.navigation.Page;
 import com.waz.zclient.controllers.navigation.PagerControllerObserver;
-import com.waz.zclient.controllers.tracking.events.drawing.DrawingOpenedEvent;
+import com.waz.zclient.controllers.usernames.UsernamesControllerObserver;
 import com.waz.zclient.core.api.scala.ModelObserver;
+import com.waz.zclient.core.controllers.tracking.events.media.SentPictureEvent;
 import com.waz.zclient.core.stores.connect.IConnectStore;
 import com.waz.zclient.core.stores.conversation.ConversationChangeRequester;
 import com.waz.zclient.core.stores.conversation.ConversationStoreObserver;
@@ -75,7 +78,6 @@ import com.waz.zclient.pages.main.pickuser.controller.IPickUserController;
 import com.waz.zclient.pages.main.pickuser.controller.PickUserControllerScreenObserver;
 import com.waz.zclient.pages.main.profile.camera.CameraContext;
 import com.waz.zclient.pages.main.profile.camera.CameraFragment;
-import com.waz.zclient.pages.main.profile.camera.CameraType;
 import com.waz.zclient.ui.animation.interpolators.penner.Quart;
 import com.waz.zclient.ui.utils.KeyboardUtils;
 import com.waz.zclient.ui.utils.MathUtils;
@@ -102,9 +104,10 @@ public class RootFragment extends BaseFragment<RootFragment.Container> implement
                                                                        DrawingObserver,
                                                                        LocationObserver,
                                                                        ParticipantsStoreObserver,
-                                                                       ConversationFragment.Container {
+                                                                       UsernamesControllerObserver,
+                                                                       ConversationFragment.Container,
+                                                                       ConversationListManagerFragment.Container {
     public static final String TAG = RootFragment.class.getName();
-    private static final String ARGUMENT_CAMERA_CONTEXT = "ARGUMENT_CAMERA_CONTEXT";
     private static final Interpolator RIGHT_VIEW_ALPHA_INTERPOLATOR = new Quart.EaseOut();
     private View leftView;
     private View rightView;
@@ -113,9 +116,9 @@ public class RootFragment extends BaseFragment<RootFragment.Container> implement
     private View backgroundColorRightView;
     private boolean conversationSwapInProgress = false;
     private boolean panelSliding = false;
-    private CameraContext savedInstanceCameraContext;
     private boolean groupConversation;
     private User otherUser;
+    private boolean rightSideShouldBeBlank = false;
 
     private final ModelObserver<IConversation> conversationModelObserver = new ModelObserver<IConversation>() {
         @Override
@@ -137,7 +140,6 @@ public class RootFragment extends BaseFragment<RootFragment.Container> implement
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         adjustLayout(true, newConfig);
-        showCameraFragment();
     }
 
     private void adjustLayout(final boolean onOrientationChange, Configuration newConfig) {
@@ -182,37 +184,6 @@ public class RootFragment extends BaseFragment<RootFragment.Container> implement
         }
     }
 
-    private void showCameraFragment() {
-        Fragment openCameraFragment = getChildFragmentManager().findFragmentById(R.id.fl__root__camera);
-        if (openCameraFragment == null || !(openCameraFragment instanceof CameraFragment)) {
-            return;
-        }
-
-        final CameraContext cameraContext = ((CameraFragment) openCameraFragment).getCameraContext() != null ?
-                                            ((CameraFragment) openCameraFragment).getCameraContext() :
-                                            savedInstanceCameraContext;
-        final boolean showCameraFeed = ((CameraFragment) openCameraFragment).isCameraFeedShown();
-        getChildFragmentManager().beginTransaction()
-                                 .replace(R.id.fl__root__camera,
-                                          BlankProgressFragment.newInstance(),
-                                          BlankProgressFragment.TAG)
-                                 .commitAllowingStateLoss();
-
-        //delayed so that camera can reset itself.
-        mainHandler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                getChildFragmentManager().beginTransaction()
-                                         .replace(R.id.fl__root__camera,
-                                                  CameraFragment.newRestartedInstance(cameraContext,
-                                                                                      showCameraFeed),
-                                                  CameraFragment.TAG)
-                                         .commit();
-
-            }
-        }, CameraFragment.CAMERA_ROTATION_COOLDOWN_DELAY);
-    }
-
     @Override
     public View onCreateView(LayoutInflater inflater,
                              @Nullable ViewGroup container,
@@ -235,8 +206,6 @@ public class RootFragment extends BaseFragment<RootFragment.Container> implement
 
             getControllerFactory().getNavigationController().setLeftPage(Page.CONVERSATION_LIST,
                                                                          TAG);
-        } else {
-            savedInstanceCameraContext = CameraContext.getFromOrdinal(savedInstanceState.getInt(ARGUMENT_CAMERA_CONTEXT));
         }
         backgroundColorRightView.setBackgroundColor(Color.TRANSPARENT);
 
@@ -267,21 +236,11 @@ public class RootFragment extends BaseFragment<RootFragment.Container> implement
         getControllerFactory().getCameraController().addCameraActionObserver(this);
         getControllerFactory().getPickUserController().addPickUserScreenControllerObserver(this);
         getControllerFactory().getGiphyController().addObserver(this);
+        getControllerFactory().getUsernameController().addUsernamesObserverAndUpdate(this);
         getControllerFactory().getDrawingController().addDrawingObserver(this);
         getStoreFactory().getParticipantsStore().addParticipantsStoreObserver(this);
         getControllerFactory().getLocationController().addObserver(this);
         onPagerEnabledStateHasChanged(getControllerFactory().getNavigationController().isPagerEnabled());
-    }
-
-    @Override
-    public void onSaveInstanceState(Bundle outState) {
-        Fragment openCameraFragment = getChildFragmentManager().findFragmentById(R.id.fl__root__camera);
-        if (openCameraFragment != null &&
-            openCameraFragment instanceof CameraFragment) {
-            outState.putInt(ARGUMENT_CAMERA_CONTEXT,
-                            ((CameraFragment) openCameraFragment).getCameraContext().ordinal());
-        }
-        super.onSaveInstanceState(outState);
     }
 
     @Override
@@ -292,6 +251,7 @@ public class RootFragment extends BaseFragment<RootFragment.Container> implement
         getControllerFactory().getConversationScreenController().removeConversationControllerObservers(this);
         getControllerFactory().getSlidingPaneController().removeObserver(this);
         getControllerFactory().getCameraController().removeCameraActionObserver(this);
+        getControllerFactory().getUsernameController().removeUsernamesObserver(this);
         getControllerFactory().getNavigationController().removePagerControllerObserver(this);
         getStoreFactory().getConversationStore().removeConversationStoreObserver(this);
         getControllerFactory().getPickUserController().removePickUserScreenControllerObserver(this);
@@ -316,9 +276,7 @@ public class RootFragment extends BaseFragment<RootFragment.Container> implement
         // So far I only know of the camera view that needs onActivityResult
         Fragment fragment = getChildFragmentManager().findFragmentById(R.id.fl__root__camera);
         if (fragment != null) {
-            fragment.onActivityResult(requestCode,
-                                      resultCode,
-                                      data);
+            fragment.onActivityResult(requestCode, resultCode, data);
         }
     }
 
@@ -332,6 +290,10 @@ public class RootFragment extends BaseFragment<RootFragment.Container> implement
 
         conversationModelObserver.setAndUpdate(toConversation);
         getStoreFactory().getParticipantsStore().setCurrentConversation(toConversation);
+
+        if (rightSideShouldBeBlank) {
+            return;
+        }
 
         getControllerFactory().getBackgroundController().expand(false);
 
@@ -368,7 +330,6 @@ public class RootFragment extends BaseFragment<RootFragment.Container> implement
                         tag = ConversationFragment.TAG;
                         break;
                 }
-
                 openMessageStream(page, fragment, tag);
             }
         });
@@ -423,7 +384,7 @@ public class RootFragment extends BaseFragment<RootFragment.Container> implement
             .replace(R.id.fl__root__right_view,
                      fragment,
                      tag)
-            .commit();
+            .commitAllowingStateLoss();
     }
 
     @Override
@@ -483,13 +444,6 @@ public class RootFragment extends BaseFragment<RootFragment.Container> implement
                                                                            IPickUserController.Destination.CONVERSATION_LIST));
     }
 
-
-    private void setBackgroundColor(int color) {
-        if (backgroundColorRightView != null) {
-            backgroundColorRightView.setBackgroundColor(color);
-        }
-    }
-
     @Override
     public void onPagerEnabledStateHasChanged(boolean enabled) {
         slidingPaneLayout.setIsSlidingEnabled(enabled);
@@ -509,19 +463,12 @@ public class RootFragment extends BaseFragment<RootFragment.Container> implement
         getControllerFactory().getCameraController().closeCamera(cameraContext);
         getStoreFactory().getConversationStore().sendMessage(imageAsset);
 
+        // Tablet doesn't have keyboard camera interface
         TrackingUtils.onSentPhotoMessage(getControllerFactory().getTrackingController(),
                                          getStoreFactory().getConversationStore().getCurrentConversation(),
-                                         imageFromCamera);
-    }
-
-    @Override
-    public void onDeleteImage(CameraContext cameraContext) {
-
-    }
-
-    @Override
-    public void onCameraTypeChanged(CameraType cameraType, CameraContext cameraContext) {
-
+                                         imageFromCamera ? SentPictureEvent.Source.CAMERA
+                                                         : SentPictureEvent.Source.GALLERY,
+                                         SentPictureEvent.Method.TABLET);
     }
 
     @Override
@@ -530,16 +477,15 @@ public class RootFragment extends BaseFragment<RootFragment.Container> implement
     }
 
     @Override
-    public void onShowDrawing(ImageAsset image, DrawingController.DrawingDestination drawingDestination) {
+    public void onShowDrawing(ImageAsset image, DrawingController.DrawingDestination drawingDestination, IDrawingController.DrawingMethod method) {
         slidingPaneLayout.setVisibility(View.GONE);
         getControllerFactory().getCameraController().closeCamera(CameraContext.MESSAGE);
         getChildFragmentManager().beginTransaction()
                                  .add(R.id.fl__root__sketch,
-                                      DrawingFragment.newInstance(image, drawingDestination),
+                                      DrawingFragment.newInstance(image, drawingDestination, method),
                                       DrawingFragment.TAG)
                                  .commit();
         getControllerFactory().getNavigationController().setRightPage(Page.DRAWING, TAG);
-        getControllerFactory().getTrackingController().tagEvent(DrawingOpenedEvent.newInstance(drawingDestination));
     }
 
     @Override
@@ -587,6 +533,11 @@ public class RootFragment extends BaseFragment<RootFragment.Container> implement
                                       GiphySharingPreviewFragment.newInstance(),
                                       GiphySharingPreviewFragment.TAG)
                                  .commit();
+    }
+
+    @Override
+    public void onTrendingSearch() {
+
     }
 
     @Override
@@ -721,16 +672,6 @@ public class RootFragment extends BaseFragment<RootFragment.Container> implement
     }
 
     @Override
-    public void onShowCommonUser(User user) {
-
-    }
-
-    @Override
-    public void onHideCommonUser() {
-
-    }
-
-    @Override
     public void onAddPeopleToConversation() {
 
     }
@@ -754,6 +695,11 @@ public class RootFragment extends BaseFragment<RootFragment.Container> implement
 
     @Override
     public void onHideOtrClient() {
+
+    }
+
+    @Override
+    public void onShowLikesList(Message message) {
 
     }
 
@@ -877,16 +823,6 @@ public class RootFragment extends BaseFragment<RootFragment.Container> implement
     }
 
     @Override
-    public void onShowCommonUserProfile(User user) {
-
-    }
-
-    @Override
-    public void onHideCommonUserProfile() {
-
-    }
-
-    @Override
     public void onAcceptedConnectRequest(IConversation conversation) {
 
     }
@@ -925,12 +861,6 @@ public class RootFragment extends BaseFragment<RootFragment.Container> implement
     public void showRemoveConfirmation(User user) {
 
     }
-
-    @Override
-    public void openCommonUserProfile(View anchor, User commonUser) {
-
-    }
-
 
     // ParticipantsStoreObserver
 
@@ -971,6 +901,22 @@ public class RootFragment extends BaseFragment<RootFragment.Container> implement
             getStoreFactory().getConversationStore().sendMessage(location);
         }
         getChildFragmentManager().popBackStack(LocationFragment.TAG, FragmentManager.POP_BACK_STACK_INCLUSIVE);
+    }
+
+    @Override
+    public void onValidUsernameGenerated(String name, String generatedUsername) {
+        rightSideShouldBeBlank = true;
+        openMessageStream(Page.NONE, BlankFragment.newInstance(), BlankFragment.TAG);
+    }
+
+    @Override
+    public void onUsernameAttemptsExhausted(String name) {
+    }
+
+    @Override
+    public void onCloseFirstAssignUsernameScreen() {
+        rightSideShouldBeBlank = false;
+        conversationModelObserver.forceUpdate();
     }
 
     public interface Container {

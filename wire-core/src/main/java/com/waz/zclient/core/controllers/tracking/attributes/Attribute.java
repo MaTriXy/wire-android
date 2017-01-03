@@ -18,6 +18,10 @@
 package com.waz.zclient.core.controllers.tracking.attributes;
 
 public enum Attribute {
+
+    REGISTRATION_WEEK("registration__week"),
+    CONNECT__HAS_CONTACT("connect__has_contact"),
+
     SESSION_FIRST_SESSION("firstSession"),
     SESSION_SEARCHED_FOR_PEOPLE("searchedPeople"),
 
@@ -26,8 +30,6 @@ public enum Attribute {
     CONNECT_INVITATION_METHOD("invitationMethod"),
 
     GROUP_CONVERSATION_CREATED("groupConversationCreated"),
-
-    PICTURE_SOURCE("pictureSource"),
 
     REGISTRATION_SHARE_CONTACTS_ALLOWED("allowed"),
 
@@ -56,10 +58,12 @@ public enum Attribute {
     CALLING_END_REASON("reason"),
     CALLING_APP_IS_ACTIVE("app_is_active"),
     WITH_OTTO("with_otto"),
+    WITH_BOT("with_bot"),
+    IS_LAST_MESSAGE("is_last_message"),
+    IS_EPHEMERAL("is_ephemeral"),
+    EPHEMERAL_EXPIRATION("ephemeral_expiration"),
 
     FILE_SIZE_BYTES("file_size_bytes"),
-
-    PEOPLE_PICKER_POSITION("position"),
 
     IS_RESENDING("is_resending"),
     FROM_SEARCH("from_search"),
@@ -80,6 +84,8 @@ public enum Attribute {
     VALUE("value"),
     USER("user"),
     EFFECT("effect"),
+    LENGTH("length"),
+    BY_USERNAME("by_username_only"),
 
     AVS("avs"),
 
@@ -90,7 +96,20 @@ public enum Attribute {
 
     // AN-4011: Temporary attributes
     REFERRAL_TOKEN("REFERRAL_TOKEN"),
-    USER_TOKEN("USER_TOKEN")
+    USER_TOKEN("USER_TOKEN"),
+    SKETCH_SOURCE("sketch_source"),
+
+    DAY("day"),
+    MONTH("month"),
+    YEAR("year"),
+
+    GCM_SUCCESS("successful_gcm_notifications"),
+    GCM_FAILED("failed_gcm_notifications"),
+    GCM_RE_REGISTER("registration_retries"),
+    TOTAL_PINGS("total_pings"),
+    RECEIVED_PONGS("received_pongs"),
+    PING_INTERVAL("ping_interval")
+
     ;
 
 

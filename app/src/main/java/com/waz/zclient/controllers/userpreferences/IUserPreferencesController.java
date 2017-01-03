@@ -18,15 +18,18 @@
 package com.waz.zclient.controllers.userpreferences;
 
 import android.support.annotation.IntDef;
-import com.waz.annotations.Controller;
-import com.waz.zclient.pages.main.profile.camera.manager.CameraDirection;
+import com.waz.zclient.camera.CameraFacing;
 
-@Controller
+import java.util.Collection;
+import java.util.List;
+import java.util.Set;
+
 public interface IUserPreferencesController {
 
     @IntDef(SEND_LOCATION_MESSAGE)
     @interface Action { }
     int SEND_LOCATION_MESSAGE = 0;
+    int LIKED_MESSAGE = 1;
 
     void tearDown();
 
@@ -38,9 +41,9 @@ public interface IUserPreferencesController {
 
     boolean showContactsDialog();
 
-    void setRecentCameraDirection(CameraDirection cameraDirection);
+    void setRecentCameraDirection(CameraFacing cameraFacing);
 
-    CameraDirection getRecentCameraDirection();
+    CameraFacing getRecentCameraDirection();
 
     void setReferralToken(String token);
 
@@ -68,7 +71,7 @@ public interface IUserPreferencesController {
 
     int getSpotifyLoginTriesCount();
 
-    boolean isGiphyEnabled();
+    boolean isCursorSendButtonEnabled();
 
     void setVerificationCode(String code);
 
@@ -102,4 +105,26 @@ public interface IUserPreferencesController {
      * We return a group number between 1 and 6. Always the same.
      */
     int getABTestingGroup();
+
+    void addRecentEmoji(String emoji);
+
+    List<String> getRecentEmojis();
+
+    void setUnsupportedEmoji(Collection<String> emoji, int version);
+
+    Set<String> getUnsupportedEmojis();
+
+    boolean hasCheckedForUnsupportedEmojis(int version);
+
+    boolean hasShareContactsEnabled();
+
+    void setShareContactsEnabled(boolean enabled);
+
+    long getLastEphemeralValue();
+
+    void setLastEphemeralValue(long value);
+
+    boolean hasPlayServicesErrorShown();
+
+    void setPlayServicesErrorShown(boolean value);
 }

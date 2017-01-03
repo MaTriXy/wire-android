@@ -18,9 +18,7 @@
 package com.waz.zclient.controllers.drawing;
 
 import com.waz.api.ImageAsset;
-import com.waz.annotations.Controller;
 
-@Controller
 public interface IDrawingController {
 
     enum DrawingDestination {
@@ -29,11 +27,19 @@ public interface IDrawingController {
         SKETCH_BUTTON
     }
 
+    enum DrawingMethod {
+        DRAW,
+        EMOJI,
+        TEXT
+    }
+
     void addDrawingObserver(DrawingObserver drawingObserver);
 
     void removeDrawingObserver(DrawingObserver drawingObserver);
 
     void showDrawing(ImageAsset image, DrawingController.DrawingDestination drawingDestination);
+
+    void showDrawing(ImageAsset image, DrawingController.DrawingDestination drawingDestination, DrawingMethod method);
 
     void hideDrawing(DrawingController.DrawingDestination drawingDestination, boolean imageSent);
 

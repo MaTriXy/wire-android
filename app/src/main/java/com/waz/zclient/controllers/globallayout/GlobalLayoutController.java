@@ -84,6 +84,16 @@ public class GlobalLayoutController implements IGlobalLayoutController {
     }
 
     @Override
+    public void keepScreenAwake() {
+        activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
+
+    @Override
+    public void resetScreenAwakeState() {
+        activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
+
+    @Override
     public void tearDown() {
         if (globalLayout != null) {
             this.globalLayout.getViewTreeObserver().removeOnGlobalLayoutListener(globalLayoutListener);
@@ -172,6 +182,9 @@ public class GlobalLayoutController implements IGlobalLayoutController {
                 break;
             case PHONE_REGISTRATION:
                 softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
+                break;
+            case DRAWING:
+                softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN | WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN;
                 break;
             default:
                 softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN | WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;

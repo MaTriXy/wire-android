@@ -17,7 +17,7 @@
  */
 package com.waz.zclient.controllers.singleimage;
 
-import android.support.annotation.Nullable;
+import android.net.Uri;
 import android.view.View;
 import com.waz.api.Message;
 import com.waz.api.User;
@@ -29,7 +29,6 @@ public class SingleImageController implements ISingleImageController {
 
     private List<SingleImageObserver> observerList;
     private View imageContainer;
-    private View loadingIndicatorView;
     private Message message;
     private boolean containerOutOfScreen;
 
@@ -83,9 +82,22 @@ public class SingleImageController implements ISingleImageController {
     }
 
     @Override
-    public void setViewReferences(View imageContainer, @Nullable View loadingIndicatorView) {
+    public void showVideo(Uri uri) {
+        for (SingleImageObserver observer : observerList) {
+            observer.onShowVideo(uri);
+        }
+    }
+
+    @Override
+    public void hideVideo() {
+        for (SingleImageObserver observer : observerList) {
+            observer.onHideVideo();
+        }
+    }
+
+    @Override
+    public void setViewReferences(View imageContainer) {
         this.imageContainer = imageContainer;
-        this.loadingIndicatorView = loadingIndicatorView;
         this.containerOutOfScreen = false;
     }
 
@@ -105,12 +117,6 @@ public class SingleImageController implements ISingleImageController {
     }
 
     @Override
-    @Nullable
-    public View getLoadingIndicator() {
-        return loadingIndicatorView;
-    }
-
-    @Override
     public void tearDown() {
         observerList.clear();
         observerList = null;
@@ -121,7 +127,6 @@ public class SingleImageController implements ISingleImageController {
     public void clearReferences() {
         message = null;
         imageContainer = null;
-        loadingIndicatorView = null;
         containerOutOfScreen = false;
     }
 }

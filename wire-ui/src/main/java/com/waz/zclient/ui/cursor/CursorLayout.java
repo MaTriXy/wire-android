@@ -21,64 +21,85 @@ import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.ObjectAnimator;
 import android.content.Context;
+import android.graphics.drawable.ColorDrawable;
 import android.os.Handler;
+import android.support.v4.content.ContextCompat;
 import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.util.AttributeSet;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.KeyEvent;
+import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.widget.FrameLayout;
-import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
+import com.waz.api.EphemeralExpiration;
 import com.waz.api.IConversation;
+import com.waz.api.Message;
+import com.waz.api.MessageContent;
+import com.waz.zclient.core.api.scala.ModelObserver;
 import com.waz.zclient.ui.R;
 import com.waz.zclient.ui.animation.interpolators.penner.Expo;
 import com.waz.zclient.ui.animation.interpolators.penner.Quart;
+import com.waz.zclient.ui.utils.ColorUtils;
 import com.waz.zclient.ui.utils.CursorUtils;
+import com.waz.zclient.ui.utils.ResourceUtils;
+import com.waz.zclient.ui.utils.TypefaceUtils;
+import com.waz.zclient.ui.views.CursorIconButton;
+import com.waz.zclient.ui.views.OnDoubleClickListener;
 import com.waz.zclient.utils.LayoutSpec;
+import com.waz.zclient.utils.StringUtils;
 import com.waz.zclient.utils.ViewUtils;
+
 import java.util.Arrays;
 import java.util.List;
 
-public class CursorLayout extends LinearLayout implements
-                                               TextView.OnEditorActionListener,
-                                               TextWatcher,
-                                               CursorToolbar.Callback,
-                                               View.OnClickListener {
+public class CursorLayout extends FrameLayout implements
+                                              TextView.OnEditorActionListener,
+                                              TextWatcher,
+                                              CursorToolbar.Callback,
+                                              EditMessageCursorToolbar.Callback {
     private static final long TOOLTIP_DURATION = 1500;
 
-    private static List<CursorMenuItem> mainCursorItems = Arrays.asList(CursorMenuItem.VIDEO_MESSAGE,
-                                                                        CursorMenuItem.CAMERA,
+    private static List<CursorMenuItem> mainCursorItems = Arrays.asList(CursorMenuItem.CAMERA,
                                                                         CursorMenuItem.SKETCH,
-                                                                        CursorMenuItem.LOCATION,
+                                                                        CursorMenuItem.GIF,
+                                                                        CursorMenuItem.PING,
                                                                         CursorMenuItem.AUDIO_MESSAGE,
                                                                         CursorMenuItem.MORE);
 
-    private static List<CursorMenuItem> secondaryCursorItems = Arrays.asList(CursorMenuItem.PING,
+    private static List<CursorMenuItem> secondaryCursorItems = Arrays.asList(CursorMenuItem.VIDEO_MESSAGE,
                                                                              CursorMenuItem.FILE,
+                                                                             CursorMenuItem.LOCATION,
                                                                              CursorMenuItem.DUMMY,
                                                                              CursorMenuItem.DUMMY,
-                                                                             CursorMenuItem.DUMMY,
-                                                                             CursorMenuItem.MORE);
+                                                                             CursorMenuItem.LESS);
 
-    private TypingIndicatorContainer typingIndicatorContainer;
+    private View editMessageBackgroundView;
     private CursorToolbarFrame cursorToolbarFrame;
     private CursorEditText newCursorEditText;
-    private ShieldViewWithBanner shieldViewWithBanner;
-    private View giphyButton;
+    private CursorIconButton sendButton;
+    private CursorIconButton ephemeralButton;
     private CursorToolbar mainToolbar;
     private CursorToolbar secondaryToolbar;
+    private EditMessageCursorToolbar editMessageCursorToolbar;
     private View topBorder;
     private TextView tooltip;
     private TextView hintView;
+    private View dividerView;
+    private CursorIconButton emojiButton;
+    private CursorIconButton keyboardButton;
 
     private CursorCallback cursorCallback;
-    private boolean giphyEnabled;
+    private boolean sendButtonIsVisible;
     private boolean tooltipEnabled;
+    private boolean isEditingMessage;
+    private boolean ephemeralSelected;
     private int anchorPositionPx2;
     private int maxLines = 2;
     private boolean keyboardIsVisible;
@@ -88,6 +109,75 @@ public class CursorLayout extends LinearLayout implements
     private ObjectAnimator showSecondaryToolbarAnimator;
     private ObjectAnimator hideMainToolbarAnimator;
     private ObjectAnimator hideSecondaryToolbarAnimator;
+    private ObjectAnimator showEditMessageToolbarAnimator;
+    private ObjectAnimator hideEditMessageToolbarAnimator;
+    private Message message;
+    private int defaultEditTextColor;
+    private int defaultDividerColor;
+    private int defaultHintTextColor;
+    private int ephemeralColor;
+    private int accentColor;
+    private IConversation conversation;
+
+    private ModelObserver<IConversation> conversationModelObserver = new ModelObserver<IConversation>() {
+        @Override
+        public void updated(IConversation conversation) {
+            if (isEditingMessage) {
+                dividerView.setBackgroundColor(ContextCompat.getColor(getContext(), R.color.separator_light));
+            } else if (conversation.isEphemeral() || ephemeralSelected) {
+                dividerView.setBackgroundColor(ephemeralColor);
+                hintView.setText(R.string.cursor__ephemeral_message);
+                hintView.setTextColor(ephemeralColor);
+                ephemeralButton.setTextColor(ephemeralColor);
+                updateEphemeralButtonBackground();
+                sendButton.setSolidBackgroundColor(ephemeralColor);
+                emojiButton.showEphemeralMode(ephemeralColor);
+                keyboardButton.showEphemeralMode(ephemeralColor);
+                mainToolbar.showEphemeralMode(ephemeralColor);
+                secondaryToolbar.showEphemeralMode(ephemeralColor);
+            } else {
+                dividerView.setBackgroundColor(defaultDividerColor);
+                hintView.setText(R.string.cursor__type_a_message);
+                hintView.setTextColor(defaultHintTextColor);
+                ephemeralButton.setTextColor(defaultEditTextColor);
+                updateEphemeralButtonBackground();
+                sendButton.setSolidBackgroundColor(accentColor);
+                emojiButton.hideEphemeralMode(defaultEditTextColor);
+                keyboardButton.hideEphemeralMode(defaultEditTextColor);
+                mainToolbar.hideEphemeraMode(defaultEditTextColor);
+                secondaryToolbar.hideEphemeraMode(defaultEditTextColor);
+            }
+
+            if (!isEditingMessage &&
+                conversation.isActive() &&
+                StringUtils.isBlank(newCursorEditText.getText().toString()) &&
+                !sendButtonIsVisible) {
+                ephemeralButton.setVisibility(VISIBLE);
+            } else {
+                ephemeralButton.setVisibility(GONE);
+            }
+        }
+    };
+
+    private OnDoubleClickListener ephemeralButtonDoubleClickListener = new OnDoubleClickListener() {
+        @Override
+        public void onDoubleClick() {
+            if (cursorCallback == null || conversation == null) {
+                return;
+            }
+            cursorCallback.onEphemeralButtonDoubleClicked(conversation.getEphemeralExpiration());
+        }
+
+        @Override
+        public void onSingleClick() {
+            if (cursorCallback == null || conversation == null) {
+                return;
+            }
+            cursorCallback.onEphemeralButtonClicked(conversation.getEphemeralExpiration());
+            ephemeralSelected = true;
+            conversationModelObserver.updated(conversation);
+        }
+    };
 
     public CursorLayout(Context context) {
         this(context, null);
@@ -100,6 +190,7 @@ public class CursorLayout extends LinearLayout implements
     public CursorLayout(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
         anchorPositionPx2 = getResources().getDimensionPixelSize(R.dimen.cursor_anchor2);
+        ephemeralColor = ContextCompat.getColor(getContext(), R.color.ephemera);
     }
 
     /**
@@ -111,7 +202,7 @@ public class CursorLayout extends LinearLayout implements
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
 
         if (LayoutSpec.get(getContext()) == LayoutSpec.LAYOUT_PHONE ||
-                LayoutSpec.get(getContext()) == LayoutSpec.LAYOUT_KINDLE) {
+            LayoutSpec.get(getContext()) == LayoutSpec.LAYOUT_KINDLE) {
             int paddingEdge = getResources().getDimensionPixelSize(R.dimen.cursor_toolbar_padding_horizontal_edge);
             cursorToolbarFrame.setPadding(paddingEdge, 0, paddingEdge, 0);
             return;
@@ -122,13 +213,11 @@ public class CursorLayout extends LinearLayout implements
         anchorPositionPx2 = CursorUtils.getCursorEditTextAnchorPosition(getContext(), width);
         if (ViewUtils.isInPortrait(getContext())) {
             int left = CursorUtils.getCursorMenuLeftMargin(getContext(), width);
-            ((FrameLayout.LayoutParams) typingIndicatorContainer.getLayoutParams()).leftMargin = left;
             ((FrameLayout.LayoutParams) newCursorEditText.getLayoutParams()).leftMargin = anchorPositionPx2;
             ((FrameLayout.LayoutParams) hintView.getLayoutParams()).leftMargin = anchorPositionPx2;
             cursorToolbarFrame.setPadding(left, 0, left, 0);
         } else {
             int left = CursorUtils.getCursorMenuLeftMargin(getContext(), width);
-            ((FrameLayout.LayoutParams) typingIndicatorContainer.getLayoutParams()).leftMargin = getResources().getDimensionPixelSize(R.dimen.cursor_typing_left_margin);
             ((FrameLayout.LayoutParams) newCursorEditText.getLayoutParams()).leftMargin = anchorPositionPx2;
             ((FrameLayout.LayoutParams) hintView.getLayoutParams()).leftMargin = anchorPositionPx2;
             cursorToolbarFrame.setPadding(left, 0, left, 0);
@@ -139,27 +228,103 @@ public class CursorLayout extends LinearLayout implements
     protected void onFinishInflate() {
         super.onFinishInflate();
 
-        typingIndicatorContainer = ViewUtils.getView(this, R.id.tic__cursor);
+        editMessageBackgroundView = ViewUtils.getView(this, R.id.fl__edit_message__background);
         cursorToolbarFrame = ViewUtils.getView(this, R.id.cal__cursor);
         newCursorEditText = ViewUtils.getView(this, R.id.cet__cursor);
-        giphyButton = ViewUtils.getView(this, R.id.cursor_button_giphy);
-        shieldViewWithBanner = ViewUtils.getView(this, R.id.svwb);
         mainToolbar = ViewUtils.getView(this, R.id.c__cursor__main);
         secondaryToolbar = ViewUtils.getView(this, R.id.c__cursor__secondary);
+        editMessageCursorToolbar = ViewUtils.getView(this, R.id.emct__edit_message__toolbar);
         topBorder = ViewUtils.getView(this, R.id.v__top_bar__cursor);
         tooltip = ViewUtils.getView(this, R.id.ctv__cursor);
         hintView = ViewUtils.getView(this, R.id.ttv__cursor_hint);
+        defaultHintTextColor = hintView.getTextColors().getDefaultColor();
+        dividerView = ViewUtils.getView(this, R.id.v__cursor__divider);
+        FrameLayout emojiButtonContainer = ViewUtils.getView(this, R.id.fl__cursor__emoji_container);
+        FrameLayout sendButtonContainer = ViewUtils.getView(this, R.id.fl__cursor__send_button_container);
 
         mainToolbar.setCursorItems(mainCursorItems);
         secondaryToolbar.setCursorItems(secondaryCursorItems);
+        editMessageCursorToolbar.setVisibility(GONE);
+        editMessageCursorToolbar.setCallback(this);
 
         cursorHeight = getResources().getDimensionPixelSize(R.dimen.new_cursor_height);
         secondaryToolbar.setTranslationY(2 * cursorHeight);
         cursorToolbarAnimationDuration = getResources().getInteger(R.integer.wire__animation__delay__regular);
         tooltip.setVisibility(View.GONE);
         connectEditText();
-        giphyButton.setVisibility(View.INVISIBLE);
+        editMessageBackgroundView.setVisibility(GONE);
 
+        defaultEditTextColor = newCursorEditText.getCurrentTextColor();
+        ColorDrawable dividerBg = (ColorDrawable) dividerView.getBackground();
+        defaultDividerColor = dividerBg.getColor();
+
+        // Emoji & keyboard button
+        LayoutInflater inflater = LayoutInflater.from(getContext());
+        emojiButton = (CursorIconButton) inflater.inflate(R.layout.cursor__item, this, false);
+        emojiButton.setCursorMenuItem(CursorMenuItem.EMOJI);
+        emojiButton.setPressedBackgroundColor(ContextCompat.getColor(getContext(), R.color.light_graphite));
+
+        keyboardButton = (CursorIconButton) inflater.inflate(R.layout.cursor__item, this, false);
+        keyboardButton.setCursorMenuItem(CursorMenuItem.KEYBOARD);
+        keyboardButton.setPressedBackgroundColor(ContextCompat.getColor(getContext(), R.color.light_graphite));
+        keyboardButton.setVisibility(GONE);
+
+        int buttonWidth = getResources().getDimensionPixelSize(R.dimen.cursor__menu_button__diameter);
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(buttonWidth,
+                                                                       buttonWidth);
+        params.gravity = Gravity.END | Gravity.CENTER_VERTICAL;
+        params.setMarginEnd(getResources().getDimensionPixelSize(R.dimen.chathead__margin));
+        emojiButtonContainer.addView(keyboardButton, params);
+        emojiButtonContainer.addView(emojiButton, params);
+        emojiButton.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                if (cursorCallback == null) {
+                    return;
+                }
+                mainToolbar.unselectItems();
+                emojiButton.setVisibility(GONE);
+                keyboardButton.setVisibility(VISIBLE);
+                cursorCallback.onEmojiButtonClicked(true);
+                resetEphemeralButton();
+
+            }
+        });
+
+        keyboardButton.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                if (cursorCallback == null) {
+                    return;
+                }
+                mainToolbar.unselectItems();
+                emojiButton.setVisibility(VISIBLE);
+                keyboardButton.setVisibility(GONE);
+                cursorCallback.onEmojiButtonClicked(false);
+                resetEphemeralButton();
+            }
+        });
+
+
+        // Send button
+        int sendButtonWidth = getResources().getDimensionPixelSize(R.dimen.cursor__send_button__width);
+        int sendButtonHeight = getResources().getDimensionPixelSize(R.dimen.cursor__send_button__height);
+        sendButton = (CursorIconButton) inflater.inflate(R.layout.cursor__item, this, false);
+        sendButton.setText(R.string.glyph__send);
+        sendButton.setTextColor(ContextCompat.getColor(getContext(), R.color.text__primary_dark));
+        sendButtonContainer.addView(sendButton, new FrameLayout.LayoutParams(sendButtonWidth, sendButtonHeight));
+        sendButton.setVisibility(View.INVISIBLE);
+
+        // Ephemeral button
+        ephemeralButton = (CursorIconButton) inflater.inflate(R.layout.cursor__item__ephemeral, this, false);
+        ephemeralButton.setText(R.string.glyph__hourglass);
+        ephemeralButton.setTextColor(defaultEditTextColor);
+        ephemeralButton.setGravity(Gravity.CENTER);
+        params = new FrameLayout.LayoutParams(sendButtonWidth, sendButtonHeight);
+        params.gravity = Gravity.CENTER;
+        sendButtonContainer.addView(ephemeralButton, params);
+        ephemeralButton.setOnClickListener(ephemeralButtonDoubleClickListener);
+        ephemeralButton.setVisibility(GONE);
     }
 
     public void setCursorCallback(CursorCallback cursorCallback) {
@@ -169,7 +334,23 @@ public class CursorLayout extends LinearLayout implements
     }
 
     public void setAccentColor(int accentColor) {
+        ephemeralColor = accentColor;
         newCursorEditText.setAccentColor(accentColor);
+        sendButton.setSolidBackgroundColor(accentColor);
+        mainToolbar.setAccentColor(accentColor);
+        this.accentColor = accentColor;
+        if (conversation == null || !conversation.isEphemeral()) {
+            sendButton.setSolidBackgroundColor(accentColor);
+        } else if (conversation.isEphemeral()) {
+            emojiButton.showEphemeralMode(ephemeralColor);
+            mainToolbar.showEphemeralMode(ephemeralColor);
+            secondaryToolbar.showEphemeralMode(ephemeralColor);
+            hintView.setTextColor(ephemeralColor);
+            dividerView.setBackgroundColor(ephemeralColor);
+            ephemeralButton.setTextColor(ephemeralColor);
+            keyboardButton.setTextColor(ephemeralColor);
+            updateEphemeralButtonBackground();
+        }
     }
 
     private void connectEditText() {
@@ -204,6 +385,16 @@ public class CursorLayout extends LinearLayout implements
      */
     @Override
     public void onTextChanged(CharSequence charSequence, int i, int i1, int i2) {
+        if (isEditingMessage()) {
+            if (message == null) {
+                return;
+            }
+            boolean enableControls = !TextUtils.equals(newCursorEditText.getText(), message.getBody());
+            hintView.setVisibility(View.GONE);
+            editMessageCursorToolbar.enableEditControls(enableControls);
+            return;
+        }
+
         String text = charSequence.toString();
         if (cursorCallback != null) {
             cursorCallback.onEditTextHasChanged(newCursorEditText.getSelectionStart(), text);
@@ -211,9 +402,7 @@ public class CursorLayout extends LinearLayout implements
 
         if (TextUtils.isEmpty(charSequence.toString())) {
             hintView.setVisibility(View.VISIBLE);
-            getTypingIndicatorContainer().setSelfIsTyping(keyboardIsVisible);
         } else {
-            getTypingIndicatorContainer().setSelfIsTyping(true);
             hintView.setVisibility(View.GONE);
         }
 
@@ -231,7 +420,16 @@ public class CursorLayout extends LinearLayout implements
     @Override
     public boolean onEditorAction(TextView textView, int actionId, KeyEvent event) {
         if (actionId == EditorInfo.IME_ACTION_SEND ||
-                (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER && event.getAction() == KeyEvent.ACTION_DOWN)) {
+            (newCursorEditText.getImeOptions() == EditorInfo.IME_ACTION_SEND &&
+             event != null &&
+             event.getKeyCode() == KeyEvent.KEYCODE_ENTER &&
+             event.getAction() == KeyEvent.ACTION_DOWN)) {
+
+            if (isEditingMessage()) {
+                onApproveEditMessage();
+                return true;
+            }
+
             String sendText = textView.getText().toString();
             if (TextUtils.isEmpty(sendText)) {
                 return false;
@@ -244,76 +442,79 @@ public class CursorLayout extends LinearLayout implements
         return false;
     }
 
-    public void enableGiphyButton(boolean enable) {
-        if (giphyEnabled == enable) {
+    public void showSendButtonAsEnterKey(boolean show) {
+        if (show) {
+            newCursorEditText.setImeOptions(EditorInfo.IME_ACTION_SEND);
+        } else {
+            newCursorEditText.setImeOptions(EditorInfo.IME_ACTION_NONE);
+        }
+    }
+
+    public void showSendButton(boolean show) {
+        if (sendButtonIsVisible == show) {
             return;
         }
-        giphyEnabled = enable;
-        if (enable) {
+        sendButtonIsVisible = show;
+        if (show) {
+            if (isEditingMessage()) {
+                return;
+            }
             int duration = getResources().getInteger(R.integer.animation_duration_medium);
-            giphyButton.setVisibility(View.VISIBLE);
-            giphyButton.setAlpha(0);
-            giphyButton.animate()
-                    .alpha(1f)
-                    .setInterpolator(new Quart.EaseOut())
-                    .setDuration(duration)
-                    .setListener(new AnimatorListenerAdapter() {
-                        @Override
-                        public void onAnimationEnd(Animator animation) {
-                            giphyButton.setAlpha(1);
-                        }
-                    });
+            ephemeralButton.setVisibility(GONE);
+            sendButton.setVisibility(View.VISIBLE);
+            sendButton.setAlpha(0);
+            sendButton.animate()
+                      .alpha(1f)
+                      .setInterpolator(new Quart.EaseOut())
+                      .setDuration(duration)
+                      .setListener(new AnimatorListenerAdapter() {
+                          @Override
+                          public void onAnimationEnd(Animator animation) {
+                              sendButton.setAlpha(1);
+                          }
+                      });
 
-            giphyButton.setOnClickListener(new OnClickListener() {
+            sendButton.setOnClickListener(new OnClickListener() {
                 @Override
                 public void onClick(View view) {
                     if (cursorCallback != null) {
-                        cursorCallback.onCursorGiphyButtonClicked();
+                        String sendText = newCursorEditText.getText().toString();
+                        if (TextUtils.isEmpty(sendText)) {
+                            return;
+                        }
+                        cursorCallback.onMessageSubmitted(sendText);
                     }
                 }
             });
-
         } else {
-            giphyButton.setVisibility(View.INVISIBLE);
-            giphyButton.setOnClickListener(null);
+            if (conversation != null &&
+                conversation.isActive()) {
+                ephemeralButton.setVisibility(VISIBLE);
+            }
+            sendButton.setVisibility(View.INVISIBLE);
+            sendButton.setOnClickListener(null);
         }
     }
-
-    public TypingIndicatorContainer getTypingIndicatorContainer() {
-        return typingIndicatorContainer;
-    }
-
 
     public void setText(String text) {
         newCursorEditText.setText(text);
         newCursorEditText.setSelection(text.length());
     }
 
+    public void appendText(String text) {
+        newCursorEditText.append(text);
+        newCursorEditText.setSelection(newCursorEditText.getText().length());
+    }
+
     public void notifyKeyboardVisibilityChanged(boolean keyboardIsVisible, View currentFocus) {
         this.keyboardIsVisible = keyboardIsVisible;
         if (keyboardIsVisible) {
-            getTypingIndicatorContainer().setSelfIsTyping(true);
             cursorToolbarFrame.shrink();
-            shieldViewWithBanner.setEnabled(false);
             if (newCursorEditText.hasFocus() && cursorCallback != null) {
                 cursorCallback.onCursorClicked();
             }
         } else {
-
-
-            if (!TextUtils.isEmpty(newCursorEditText.getText())) {
-                getTypingIndicatorContainer().setSelfIsTyping(true);
-            } else {
-                getTypingIndicatorContainer().setSelfIsTyping(false);
-            }
-
             cursorToolbarFrame.expand();
-
-            if (hasText()) {
-                shieldViewWithBanner.setEnabled(false);
-            } else {
-                shieldViewWithBanner.setEnabled(true);
-            }
         }
     }
 
@@ -333,17 +534,13 @@ public class CursorLayout extends LinearLayout implements
         this.newCursorEditText.setSelection(selection);
     }
 
-    public void tearDown() {
-        shieldViewWithBanner.tearDown();
-    }
 
     public void setConversation(IConversation conversation) {
-        shieldViewWithBanner.setConversation(conversation);
+        this.conversation = conversation;
         enableMessageWriting();
-        mainToolbar.setTranslationY(0);
-        mainToolbar.setVisibility(VISIBLE);
-        secondaryToolbar.setTranslationY(2 * cursorHeight);
-        secondaryToolbar.setVisibility(GONE);
+        resetMainAndSecondaryToolbars();
+        closeEditMessage(false);
+        conversationModelObserver.setAndUpdate(conversation);
     }
 
     @Override
@@ -354,19 +551,26 @@ public class CursorLayout extends LinearLayout implements
         if (cursorCallback != null) {
             cursorCallback.onCursorButtonClicked(item);
         }
-        if (item == CursorMenuItem.MORE) {
-            if (mainToolbar.getVisibility() == VISIBLE) {
-                showSecondaryCursorToolbar();
-            } else {
-                hideSecondaryCursorToolbar();
-            }
 
+        switch (item) {
+            case MORE:
+                showSecondaryCursorToolbar();
+                break;
+            case LESS:
+                hideSecondaryCursorToolbar();
+                break;
+            case CAMERA:
+            case AUDIO_MESSAGE:
+                resetEmojiButton();
+                resetEphemeralButton();
+                break;
         }
     }
 
     @Override
     public void onCursorButtonLongPressed(CursorMenuItem cursorMenuItem) {
-        if (cursorMenuItem == CursorMenuItem.DUMMY) {
+        if (cursorMenuItem == CursorMenuItem.DUMMY ||
+            cursorMenuItem == CursorMenuItem.KEYBOARD) {
             return;
         }
         if (cursorCallback != null) {
@@ -401,19 +605,18 @@ public class CursorLayout extends LinearLayout implements
 
         ((FrameLayout.LayoutParams) tooltip.getLayoutParams()).gravity = gravity;
 
-        setOnClickListener(this);
         tooltipEnabled = true;
         tooltip.setText(message);
         tooltip
-                .animate()
-                .alpha(1)
-                .withStartAction(new Runnable() {
-                    @Override
-                    public void run() {
-                        tooltip.setVisibility(View.VISIBLE);
-                        tooltip.setAlpha(0);
-                    }
-                });
+            .animate()
+            .alpha(1)
+            .withStartAction(new Runnable() {
+                @Override
+                public void run() {
+                    tooltip.setVisibility(View.VISIBLE);
+                    tooltip.setAlpha(0);
+                }
+            });
 
         if (cursorCallback != null) {
             cursorCallback.onShowedActionHint(item);
@@ -427,6 +630,90 @@ public class CursorLayout extends LinearLayout implements
         }, TOOLTIP_DURATION);
     }
 
+    @Override
+    public void onCloseEditMessage() {
+        closeEditMessage(true);
+    }
+
+    @Override
+    public void onResetEditMessage() {
+        if (message == null) {
+            return;
+        }
+        newCursorEditText.setText(message.getBody());
+        newCursorEditText.setSelection(newCursorEditText.getText().length());
+    }
+
+    @Override
+    public void onApproveEditMessage() {
+        if (TextUtils.isEmpty(newCursorEditText.getText().toString().trim())) {
+            message.recall();
+            Toast.makeText(getContext(), R.string.conversation__message_action__delete__confirmation, Toast.LENGTH_SHORT).show();
+        } else {
+            message.update(new MessageContent.Text(newCursorEditText.getText().toString()));
+        }
+
+        if (cursorCallback != null) {
+            cursorCallback.onApprovedMessageEditing(message);
+        }
+        closeEditMessage(true);
+    }
+
+    public boolean isEditingMessage() {
+        return isEditingMessage;
+    }
+
+    public void editMessage(Message message) {
+        isEditingMessage = true;
+        this.message = message;
+        newCursorEditText.setText(message.getBody());
+        newCursorEditText.setSelection(newCursorEditText.getText().length());
+
+        if (sendButtonIsVisible) {
+            showSendButton(false);
+        }
+        ephemeralButton.setVisibility(GONE);
+
+        setBackgroundColor(ContextCompat.getColor(getContext(), R.color.white));
+        ViewUtils.fadeInView(editMessageBackgroundView);
+        newCursorEditText.setTextColor(ContextCompat.getColor(getContext(), R.color.text__primary_light));
+        dividerView.setBackgroundColor(ContextCompat.getColor(getContext(), R.color.separator_light));
+
+        showEditMessageToolbar();
+    }
+
+    public void closeEditMessage(boolean animated) {
+        if (!isEditingMessage) {
+            return;
+        }
+        message = null;
+        newCursorEditText.setText("");
+        hintView.setVisibility(VISIBLE);
+        isEditingMessage = false;
+
+        if (animated) {
+            hideEditMessageToolbar();
+            ViewUtils.fadeOutView(editMessageBackgroundView);
+        } else {
+            editMessageCursorToolbar.setVisibility(GONE);
+            editMessageBackgroundView.setVisibility(GONE);
+            resetMainAndSecondaryToolbars();
+        }
+
+        setBackgroundColor(ContextCompat.getColor(getContext(), R.color.transparent));
+        newCursorEditText.setTextColor(defaultEditTextColor);
+        if (conversation != null && conversation.isEphemeral()) {
+            dividerView.setBackgroundColor(ContextCompat.getColor(getContext(), R.color.ephemera));
+        } else {
+            dividerView.setBackgroundColor(defaultDividerColor);
+        }
+
+        if (cursorCallback != null) {
+            cursorCallback.onClosedMessageEditing();
+        }
+        resetEphemeralButton();
+    }
+
     private void dismissToolbar() {
         if (!tooltipEnabled) {
             return;
@@ -434,16 +721,51 @@ public class CursorLayout extends LinearLayout implements
 
         tooltipEnabled = false;
         tooltip
-                .animate()
-                .alpha(0)
-                .withEndAction(new Runnable() {
-                    @Override
-                    public void run() {
-                        tooltip.setVisibility(View.GONE);
-                    }
-                });
+            .animate()
+            .alpha(0)
+            .withEndAction(new Runnable() {
+                @Override
+                public void run() {
+                    tooltip.setVisibility(View.GONE);
+                }
+            });
     }
 
+    private void hideEditMessageToolbar() {
+        if (showMainToolbarAnimator == null) {
+            showMainToolbarAnimator = getShowToolbarAnimator(mainToolbar, -cursorHeight, 0);
+        }
+
+        if (hideEditMessageToolbarAnimator == null) {
+            hideEditMessageToolbarAnimator = getHideToolbarAnimator(editMessageCursorToolbar, 0, 2 * cursorHeight);
+        }
+
+        mainToolbar.setVisibility(VISIBLE);
+        showMainToolbarAnimator.start();
+        hideEditMessageToolbarAnimator.start();
+    }
+
+    private void showEditMessageToolbar() {
+        ObjectAnimator hideAnimator;
+        if (mainToolbar.getVisibility() == VISIBLE) {
+            if (hideMainToolbarAnimator == null) {
+                hideMainToolbarAnimator = getHideToolbarAnimator(mainToolbar, 0, -cursorHeight);
+            }
+            hideAnimator = hideMainToolbarAnimator;
+        } else {
+            if (hideSecondaryToolbarAnimator == null) {
+                hideSecondaryToolbarAnimator = getHideToolbarAnimator(secondaryToolbar, 0, 2 * cursorHeight);
+            }
+            hideAnimator = hideSecondaryToolbarAnimator;
+        }
+
+        if (showEditMessageToolbarAnimator == null) {
+            showEditMessageToolbarAnimator = getShowToolbarAnimator(editMessageCursorToolbar, 2 * cursorHeight, 0);
+        }
+        editMessageCursorToolbar.setVisibility(VISIBLE);
+        hideAnimator.start();
+        showEditMessageToolbarAnimator.start();
+    }
 
     private void showSecondaryCursorToolbar() {
         if (hideMainToolbarAnimator == null) {
@@ -476,6 +798,7 @@ public class CursorLayout extends LinearLayout implements
     private ObjectAnimator getShowToolbarAnimator(View view, float fromValue, float toValue) {
         ObjectAnimator animator = ObjectAnimator.ofFloat(view, View.TRANSLATION_Y, fromValue, toValue);
         animator.setDuration(cursorToolbarAnimationDuration);
+        animator.setStartDelay(getResources().getInteger(R.integer.animation_delay_short));
         animator.setInterpolator(new Expo.EaseOut());
         return animator;
     }
@@ -483,7 +806,7 @@ public class CursorLayout extends LinearLayout implements
     private ObjectAnimator getHideToolbarAnimator(final View view, float fromValue, float toValue) {
         ObjectAnimator animator = ObjectAnimator.ofFloat(view, View.TRANSLATION_Y, fromValue, toValue);
         animator.setDuration(cursorToolbarAnimationDuration);
-        animator.setInterpolator(new Expo.EaseOut());
+        animator.setInterpolator(new Expo.EaseIn());
         animator.addListener(new AnimatorListenerAdapter() {
             @Override
             public void onAnimationCancel(Animator animation) {
@@ -504,16 +827,74 @@ public class CursorLayout extends LinearLayout implements
         return animator;
     }
 
-    @Override
-    public void onClick(View v) {
-        dismissToolbar();
-    }
-
     public void showTopbar(boolean show) {
         if (show) {
             topBorder.setVisibility(View.VISIBLE);
         } else {
             topBorder.setVisibility(View.INVISIBLE);
+        }
+    }
+
+    public void onExtendedCursorClosed() {
+        mainToolbar.unselectItems();
+        resetEmojiButton();
+        resetEphemeralButton();
+    }
+
+    private void resetMainAndSecondaryToolbars() {
+        mainToolbar.setTranslationY(0);
+        mainToolbar.setVisibility(VISIBLE);
+        secondaryToolbar.setTranslationY(2 * cursorHeight);
+        secondaryToolbar.setVisibility(GONE);
+    }
+
+    private void resetEmojiButton() {
+        keyboardButton.setVisibility(GONE);
+        emojiButton.setVisibility(VISIBLE);
+    }
+
+    private void resetEphemeralButton() {
+        ephemeralSelected = false;
+        if (conversation != null) {
+            conversationModelObserver.updated(conversation);
+        }
+    }
+
+    private void updateEphemeralButtonBackground() {
+        if (conversation != null &&
+            conversation.isEphemeral()) {
+            EphemeralExpiration expiration = conversation.getEphemeralExpiration();
+            final String value;
+            switch (expiration) {
+                case ONE_DAY:
+                    value = getResources().getString(R.string.cursor__ephemeral_message__timer_days,
+                                                     String.valueOf(expiration.milliseconds / 1000 / 60 / 60 / 24));
+                    break;
+                case ONE_MINUTE:
+                case FIVE_MINUTES:
+                    value = getResources().getString(R.string.cursor__ephemeral_message__timer_min,
+                                                     String.valueOf(expiration.milliseconds / 1000 / 60));
+                    break;
+                case FIVE_SECONDS:
+                case FIFTEEN_SECONDS:
+                case THIRTY_SECONDS:
+                case NONE:
+                default:
+                    value = getResources().getString(R.string.cursor__ephemeral_message__timer_seconds,
+                                                     String.valueOf(expiration.milliseconds / 1000));
+            }
+            int bgColor = ColorUtils.injectAlpha(ResourceUtils.getResourceFloat(getResources(), R.dimen.ephemeral__accent__timer_alpha),
+                                                 accentColor);
+            ephemeralButton.setBackground(ColorUtils.getTintedDrawable(getContext(), R.drawable.background__cursor__ephemeral_timer,
+                                                                       bgColor));
+            ephemeralButton.setText(value);
+            ephemeralButton.setTypeface(TypefaceUtils.getTypeface(getContext().getString(R.string.wire__typeface__regular)));
+            ephemeralButton.setTextSize(TypedValue.COMPLEX_UNIT_PX, getContext().getResources().getDimensionPixelSize(R.dimen.wire__text_size__small));
+        } else {
+            ephemeralButton.setBackground(null);
+            ephemeralButton.setTypeface(TypefaceUtils.getTypeface(TypefaceUtils.getGlyphsTypefaceName()));
+            ephemeralButton.setText(R.string.glyph__hourglass);
+            ephemeralButton.setTextSize(TypedValue.COMPLEX_UNIT_PX, getContext().getResources().getDimensionPixelSize(R.dimen.wire__text_size__regular));
         }
     }
 }

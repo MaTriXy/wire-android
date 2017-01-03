@@ -29,66 +29,98 @@ import android.support.annotation.Nullable;
 import android.support.annotation.StringRes;
 import android.view.LayoutInflater;
 import android.view.View;
+import com.waz.api.BitmapCallback;
 import com.waz.api.ImageAsset;
 import com.waz.api.KindOfMedia;
 import com.waz.api.LoadHandle;
 import com.waz.api.MediaAsset;
 import com.waz.api.Message;
-import com.waz.api.UpdateListener;
+import com.waz.api.NetworkMode;
 import com.waz.zclient.R;
+import com.waz.zclient.controllers.accentcolor.AccentColorObserver;
 import com.waz.zclient.controllers.mediaplayer.DefaultMediaPlayer;
 import com.waz.zclient.controllers.mediaplayer.MediaPlayerState;
-import com.waz.zclient.controllers.selection.MessageActionModeController;
 import com.waz.zclient.controllers.streammediaplayer.IStreamMediaPlayerController;
 import com.waz.zclient.controllers.streammediaplayer.StreamMediaPlayerObserver;
+import com.waz.zclient.controllers.tracking.events.conversation.ReactedToMessageEvent;
+import com.waz.zclient.controllers.userpreferences.IUserPreferencesController;
+import com.waz.zclient.core.api.scala.ModelObserver;
+import com.waz.zclient.core.stores.network.DefaultNetworkAction;
 import com.waz.zclient.core.stores.network.NetworkStoreObserver;
 import com.waz.zclient.pages.main.conversation.views.MessageViewsContainer;
-import com.waz.zclient.pages.main.conversation.views.row.message.RetryMessageViewController;
+import com.waz.zclient.pages.main.conversation.views.row.message.MessageViewController;
 import com.waz.zclient.pages.main.conversation.views.row.separator.Separator;
-import com.waz.zclient.ui.views.TouchFilterableLayout;
-import com.waz.zclient.ui.views.TouchFilterableLinearLayout;
+import com.waz.zclient.ui.theme.ThemeUtils;
+import com.waz.zclient.ui.utils.ColorUtils;
+import com.waz.zclient.ui.utils.ResourceUtils;
+import com.waz.zclient.ui.views.EphemeralDotAnimationView;
 import com.waz.zclient.utils.MessageUtils;
 import com.waz.zclient.utils.ThreadUtils;
 import com.waz.zclient.utils.ViewUtils;
 import com.waz.zclient.views.media.MediaPlayerView;
 
-public abstract class MediaPlayerViewController extends RetryMessageViewController implements MediaPlayerView.MediaPlayerListener,
-                                                                                              StreamMediaPlayerObserver,
-                                                                                              NetworkStoreObserver,
-                                                                                              View.OnLongClickListener,
-                                                                                              MessageActionModeController.Selectable {
+public abstract class MediaPlayerViewController extends MessageViewController implements MediaPlayerView.MediaPlayerListener,
+                                                                                         StreamMediaPlayerObserver,
+                                                                                         TextMessageLinkTextView.Callback,
+                                                                                         NetworkStoreObserver,
+                                                                                         AccentColorObserver {
 
-    private TouchFilterableLinearLayout view;
-    private TextMessageWithTimestamp textWithTimestamp;
+    private View view;
+    private TextMessageLinkTextView textMessageLinkTextView;
     protected MediaPlayerView mediaPlayerView;
+    private EphemeralDotAnimationView ephemeralDotAnimationView;
+    private View ephemeralTypeView;
+    private View mediaPlayerContainerView;
     private boolean updateProgressEnabled;
     private LoadHandle loadHandle;
     private MediaAsset mediaAsset;
     private ImageAsset imageAsset;
     private final long refreshRate;
-    private final UpdateListener imageAssetUpdateListener = new UpdateListener() {
+
+    private final ModelObserver<Message> messageModelObserver = new ModelObserver<Message>() {
         @Override
-        public void updated() {
-            if (mediaAsset == null ||
-                imageAsset == null ||
-                message == null) {
+        public void updated(Message message) {
+            if (message.isEphemeral() && message.isExpired()) {
+                messageExpired();
                 return;
             }
+            final Message.Part mediaPart = MessageUtils.getFirstRichMediaPart(message);
+            if (imageAsset != null) {
+                imageAssetModelObserver.clear();
+                imageAsset = null;
+            }
+            if (mediaPart == null) {
+                showError();
+                return;
+            }
+            mediaAsset = mediaPart.getMediaAsset();
+            if (mediaAsset == null ||
+                mediaAsset.isEmpty()) {
+                showError();
+                return;
+            }
+            imageAsset = mediaAsset.getArtwork();
+            imageAssetModelObserver.setAndUpdate(imageAsset);
+        }
+    };
+
+    private final ModelObserver<ImageAsset> imageAssetModelObserver = new ModelObserver<ImageAsset>() {
+        @Override
+        public void updated(ImageAsset model) {
             final int bitmapWidth = view.getMeasuredWidth() > 0 ?
                                     view.getMeasuredWidth() :
                                     ViewUtils.getOrientationIndependentDisplayWidth(context);
-            loadHandle = imageAsset.getBitmap(bitmapWidth, new ImageAsset.BitmapCallback() {
+            loadHandle = imageAsset.getBitmap(bitmapWidth, new BitmapCallback() {
                 @Override
-                public void onBitmapLoaded(Bitmap bitmap, boolean isPreview) {
-                    if (isPreview ||
-                        message == null) {
+                public void onBitmapLoaded(Bitmap bitmap) {
+                    if (message == null) {
                         return;
                     }
                     updateMediaPlayerView(bitmap);
                 }
 
                 @Override
-                public void onBitmapLoadingFailed() {
+                public void onBitmapLoadingFailed(BitmapLoadingFailed reason) {
                     if (message == null) {
                         return;
                     }
@@ -97,6 +129,7 @@ public abstract class MediaPlayerViewController extends RetryMessageViewControll
             });
         }
     };
+
     private final Runnable timeUpdateRunnable = new Runnable() {
         @Override
         public void run() {
@@ -122,71 +155,68 @@ public abstract class MediaPlayerViewController extends RetryMessageViewControll
         refreshRate = context.getResources().getInteger(R.integer.mediaplayer__time_refresh_rate_ms);
         updateProgressEnabled = true;
         LayoutInflater inflater = LayoutInflater.from(context);
-        view = (TouchFilterableLinearLayout) inflater.inflate(R.layout.row_conversation_media_player, null);
-        textWithTimestamp = ViewUtils.getView(view, R.id.tmwt__message_and_timestamp);
-        textWithTimestamp.setMessageViewsContainer(messageViewsContainer);
-        textWithTimestamp.setOnLongClickListener(this);
+        view = inflater.inflate(R.layout.row_conversation_media_player, null);
+        textMessageLinkTextView = ViewUtils.getView(view, R.id.tmltv__row_conversation__message);
+        textMessageLinkTextView.setMessageViewsContainer(messageViewsContainer);
+        textMessageLinkTextView.setCallback(this);
         mediaPlayerView = ViewUtils.getView(view, R.id.mpv__row_conversation__message_media_player);
         mediaPlayerView.setOnLongClickListener(this);
+        ephemeralDotAnimationView = ViewUtils.getView(view, R.id.edav__ephemeral_view);
+        ephemeralTypeView = ViewUtils.getView(view, R.id.gtv__row_conversation__media__ephemeral_type);
+        ephemeralTypeView.setVisibility(View.GONE);
+        mediaPlayerContainerView = ViewUtils.getView(view, R.id.fl__row_conversation__media_player_container);
         resetMediaPlayerView(R.string.mediaplayer__artist__placeholder, getSource());
         afterInit();
     }
 
     @Override
     protected void onSetMessage(Separator separator) {
-        super.onSetMessage(separator);
-        textWithTimestamp.setMessage(message);
-        messageViewsContainer.getStoreFactory().getNetworkStore().addNetworkControllerObserver(this);
+        textMessageLinkTextView.setMessage(message);
+        messageViewsContainer.getStoreFactory().getNetworkStore().addNetworkStoreObserver(this);
         getPlayerController().addStreamMediaObserver(this);
         resetMediaPlayerView(R.string.mediaplayer__artist__placeholder, getSource());
         mediaPlayerView.setMediaPlayerListener(this);
         mediaPlayerView.setSourceImage(getSourceImage());
-        updated();
+        messageViewsContainer.getControllerFactory().getAccentColorController().addAccentColorObserver(this);
+        ephemeralDotAnimationView.setMessage(message);
+        messageModelObserver.setAndUpdate(message);
     }
 
     @Override
-    public void updated() {
-        super.updated();
-        final Message.Part mediaPart = MessageUtils.getFirstRichMediaPart(message);
-        if (imageAsset != null) {
-            imageAsset.removeUpdateListener(imageAssetUpdateListener);
-            imageAsset = null;
-        }
-        if (mediaPart == null) {
-            showError();
-            return;
-        }
-        mediaAsset = mediaPart.getMediaAsset();
-        if (mediaAsset == null ||
-            mediaAsset.isEmpty()) {
-            showError();
-            return;
-        }
-        imageAsset = mediaAsset.getArtwork();
-        imageAsset.addUpdateListener(imageAssetUpdateListener);
-        imageAssetUpdateListener.updated();
+    protected void updateMessageEditingStatus() {
+        super.updateMessageEditingStatus();
+        float opacity = messageViewsContainer.getControllerFactory().getConversationScreenController().isMessageBeingEdited(message) ?
+                        ResourceUtils.getResourceFloat(context.getResources(), R.dimen.content__youtube__alpha_overlay) :
+                        1f;
+        textMessageLinkTextView.setAlpha(opacity);
     }
 
     @Override
     public void recycle() {
+        messageModelObserver.clear();
+        imageAssetModelObserver.clear();
+        ephemeralDotAnimationView.setMessage(null);
         unscheduleTimeUpdate();
-        textWithTimestamp.recycle();
+        textMessageLinkTextView.recycle();
         mediaPlayerView.setSeekBarEnabled(false);
         if (getPlayerController() != null) {
             getPlayerController().removeStreamMediaObserver(this);
-            messageViewsContainer.getStoreFactory().getNetworkStore().removeNetworkControllerObserver(this);
+            messageViewsContainer.getStoreFactory().getNetworkStore().removeNetworkStoreObserver(this);
         }
         resetMediaPlayerView(R.string.mediaplayer__artist__placeholder, getSource());
         if (loadHandle != null) {
             loadHandle.cancel();
             loadHandle = null;
         }
-        if (imageAsset != null) {
-            imageAsset.removeUpdateListener(imageAssetUpdateListener);
-            imageAsset = null;
-        }
+        imageAsset = null;
         mediaAsset = null;
         updateProgressEnabled = true;
+        if (!messageViewsContainer.isTornDown()) {
+            messageViewsContainer.getControllerFactory().getAccentColorController().removeAccentColorObserver(this);
+        }
+        mediaPlayerView.setVisibility(View.VISIBLE);
+        mediaPlayerContainerView.setBackground(null);
+
         super.recycle();
     }
 
@@ -211,7 +241,7 @@ public abstract class MediaPlayerViewController extends RetryMessageViewControll
     }
 
     @Nullable
-    public TouchFilterableLayout getView() {
+    public View getView() {
         return view;
     }
 
@@ -339,11 +369,12 @@ public abstract class MediaPlayerViewController extends RetryMessageViewControll
             return;
         }
         unscheduleTimeUpdate();
-        if (!messageViewsContainer.getStoreFactory().getNetworkStore().hasInternetConnection()) {
-            messageViewsContainer.getStoreFactory().getNetworkStore().notifyNetworkAccessFailed();
-            return;
-        }
-        showError();
+        messageViewsContainer.getStoreFactory().getNetworkStore().doIfHasInternetOrNotifyUser(new DefaultNetworkAction() {
+            @Override
+            public void execute(NetworkMode networkMode) {
+                showError();
+            }
+        });
     }
 
     @Override
@@ -420,9 +451,27 @@ public abstract class MediaPlayerViewController extends RetryMessageViewControll
             resetMediaPlayerView(R.string.mediaplayer__artist__error, getSource());
             mediaPlayerView.setMediaPlayerListener(this);
             mediaPlayerView.setSourceImage(getSourceImage());
-            updated();
+            messageModelObserver.forceUpdate();
         } else {
             onControlClicked();
+        }
+    }
+
+    @Override
+    public void onPlaceholderDoubleTap() {
+        if (message.isEphemeral()) {
+            return;
+        } else if (message.isLikedByThisUser()) {
+            message.unlike();
+            messageViewsContainer.getControllerFactory().getTrackingController().tagEvent(ReactedToMessageEvent.unlike(message.getConversation(),
+                                                                                                                       message,
+                                                                                                                       ReactedToMessageEvent.Method.DOUBLE_TAP));
+        } else {
+            message.like();
+            messageViewsContainer.getControllerFactory().getUserPreferencesController().setPerformedAction(IUserPreferencesController.LIKED_MESSAGE);
+            messageViewsContainer.getControllerFactory().getTrackingController().tagEvent(ReactedToMessageEvent.like(message.getConversation(),
+                                                                                                                     message,
+                                                                                                                     ReactedToMessageEvent.Method.DOUBLE_TAP));
         }
     }
 
@@ -457,7 +506,7 @@ public abstract class MediaPlayerViewController extends RetryMessageViewControll
 
 
     @Override
-    public void onConnectivityChange(boolean hasInternet) {
+    public void onConnectivityChange(boolean hasInternet, boolean isServerError) {
         if (messageViewsContainer == null ||
             messageViewsContainer.isTornDown()) {
             return;
@@ -467,20 +516,30 @@ public abstract class MediaPlayerViewController extends RetryMessageViewControll
                 pause();
             }
         } else {
-            updated();
+            messageModelObserver.forceUpdate();
         }
     }
 
     @Override
-    public void onNetworkAccessFailed() { }
+    public void onNoInternetConnection(boolean isServerError) { }
 
     @Override
     public void onAccentColorHasChanged(Object sender, int color) {
-        super.onAccentColorHasChanged(sender, color);
         if (mediaPlayerView == null) {
             return;
         }
         mediaPlayerView.setProgressColor(color);
+        textMessageLinkTextView.onAccentColorHasChanged(sender, color);
+
+        ephemeralDotAnimationView.setPrimaryColor(color);
+        ephemeralDotAnimationView.setSecondaryColor(ColorUtils.injectAlpha(ResourceUtils.getResourceFloat(context.getResources(), R.dimen.ephemeral__accent__timer_alpha),
+                                                                           color));
+        if (message != null &&
+            message.isEphemeral() &&
+            message.isExpired()) {
+            mediaPlayerContainerView.setBackgroundColor(ColorUtils.injectAlpha(ThemeUtils.getEphemeralBackgroundAlpha(context),
+                                                                               color));
+        }
     }
 
     protected void openExternal() {
@@ -500,12 +559,14 @@ public abstract class MediaPlayerViewController extends RetryMessageViewControll
             getPlayerController() == null) {
             return;
         }
-        if (!messageViewsContainer.getStoreFactory().getNetworkStore().hasInternetConnection()) {
-            messageViewsContainer.getStoreFactory().getNetworkStore().notifyNetworkAccessFailed();
-            return;
-        }
-        mediaPlayerView.setAllowControl(false);
-        getPlayerController().play(message, mediaAsset);
+
+        messageViewsContainer.getStoreFactory().getNetworkStore().doIfHasInternetOrNotifyUser(new DefaultNetworkAction() {
+            @Override
+            public void execute(NetworkMode networkMode) {
+                mediaPlayerView.setAllowControl(false);
+                getPlayerController().play(message, mediaAsset);
+            }
+        });
     }
 
     protected void pause() {
@@ -523,15 +584,21 @@ public abstract class MediaPlayerViewController extends RetryMessageViewControll
     }
 
     @Override
-    public boolean onLongClick(View v) {
-        if (message == null ||
-            messageViewsContainer == null ||
-            messageViewsContainer.getControllerFactory() == null ||
-            messageViewsContainer.getControllerFactory().isTornDown()) {
-            return false;
+    public void onTextMessageLinkTextViewOnLongClicked(View view) {
+        onLongClick(view);
+    }
+
+    @CallSuper
+    protected void messageExpired() {
+        if (loadHandle != null) {
+            loadHandle.cancel();
         }
-        messageViewsContainer.getControllerFactory().getMessageActionModeController().selectMessage(message);
-        return true;
+        imageAssetModelObserver.clear();
+        mediaPlayerView.setVisibility(View.INVISIBLE);
+        int accent = messageViewsContainer.getControllerFactory().getAccentColorController().getColor();
+        mediaPlayerContainerView.setBackgroundColor(ColorUtils.injectAlpha(ThemeUtils.getEphemeralBackgroundAlpha(context),
+                                                                           accent));
+        ephemeralTypeView.setVisibility(View.VISIBLE);
     }
 
     ///////////////////////////////////////////////////////////////////

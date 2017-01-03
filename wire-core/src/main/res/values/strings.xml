@@ -19,6 +19,13 @@
 
 -->
 <resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="permissions_denied_dialog_acknowledge">OK</string>
+    <string name="permissions_denied_dialog_settings">Settings</string>
+
+    <string name="camera_not_available">CAMERA NOT AVAILABLE</string>
+    <string name="camera_permissions_denied_title">Camera not available</string>
+    <string name="camera_permissions_denied_message">To take and send photos, grant permission to acces the camera</string>
+
     <!-- Registration and Sign in -->
     <string name="welcome__slogan">Modern, private communication.</string>
     <string name="welcome__terms_of_service">BY CONTINUING YOU AGREE TO _TERMS OF USE_.</string>
@@ -113,7 +120,7 @@
     <string name="invitation__email__failed">Unable to register with this invitation.</string>
 
     <!-- People picker/start UI -->
-    <string name="pick_user_search_focus">\u0020 SEARCH BY NAME OR EMAIL</string>
+    <string name="pick_user_search_focus">\u0020 SEARCH BY NAME OR USERNAME</string>
     <string name="pick_user_search__add_to_conversation">\u0020 SEARCH BY NAME</string>
     <string name="people_picker__top_users_header_title">Top people</string>
     <string name="people_picker__address_book_matches_title">Connect</string>
@@ -151,9 +158,9 @@
     <!-- Invite -->
     <string name="people_picker__invite__share_details_label">Send an invitation</string>
     <!-- Should not use newline in the dialog message, not supported by all devices, text will be cut off -->
-    <string name="people_picker__invite__share_details_dialog">Share Wire with your friends. The invitation can be used for 2 weeks.</string>
+    <string name="people_picker__invite__share_details_dialog">Share Wire with your friends.</string>
     <string name="people_picker__invite__share_text__header">%1$s wants to connect on Wire</string>
-    <string name="people_picker__invite__share_text__body">I\'m on Wire, talk to you there https://get.wire.com</string>
+    <string name="people_picker__invite__share_text__body">I\'m on Wire, search for %1$s or visit get.wire.com.</string>
     <string name="people_picker__invite__message">Hi,\nThanks for the invitation. Let\'s connect.\n%1$s</string>
     <string name="people_picker__invite__sent_feedback">Invitation sent</string>
     <string name="people_picker__contact_list__user_selection_button__label">OPEN</string>
@@ -161,8 +168,13 @@
     <string name="people_picker__contact_list__contact_selection_button__label">INVITE</string>
     <string name="people_picker__contact_list__invite_dialog__title">Send invitation</string>
     <string name="people_picker__contact_list__searchbox__hint">\u0020 SEARCH BY NAME</string>
-    <string name="people_picker__contact_list__generic_invite__label">SHARE WIRE WITH YOUR FRIENDS</string>
-    <string name="people_picker__contact_list__generic_invite__button__label">SHARE</string>
+    <string name="people_picker__contact_list__generic_invite__button__label">INVITE MORE PEOPLE</string>
+    <plurals name="people_picker__contact_list_contact_sub_label_common_friends">
+        <item quantity="one">%1$d person in common</item>
+        <item quantity="other">%1$d people in common</item>
+    </plurals>
+    <string name="people_picker__contact_list_contact_sub_label_address_book">%1$s in Contacts</string>
+    <string name="people_picker__contact_list_contact_sub_label_address_book_identical">in Contacts</string>
 
     <!-- Conversation: Quick menu -->
     <string name="conversation_quick_menu__conversation_button__single_label">OPEN</string>
@@ -185,6 +197,7 @@
     <string name="content__system__message_deleted">This message has been removed</string>
     <string name="content_system_message_timestamp_failure">Unsent message.</string>
     <string name="content_system_message_timestamp_pending">Sending\u2026</string>
+    <string name="content_system_message_timestamp_deleted">Deleted on %1$s</string>
 
     <!-- Conversation: missed call -->
     <string name="content__missed_call__you_called">[[YOU]] CALLED</string>
@@ -232,6 +245,7 @@
     <string name="content__file__action__share">SHARE</string>
     <string name="content__file__action__open__no_app_found">No app found to open this file type</string>
     <string name="content__file__action__save_completed">File successfully saved</string>
+    <string name="content__file__action__save_error">Unable to save file</string>
 
     <string name="content__location__no_map_placeholder">THE LOCATION WILL APPEAR ON THE MAP WHEN YOU ARE BACK ONLINE.</string>
 
@@ -272,12 +286,11 @@
     <string name="calling__cannot_start__ongoing_voice__button_positive">Answer</string>
     <string name="calling__cannot_start__ongoing_voice__button_negative">Cancel</string>
     <string name="calling__video_call__slow_connection__message">You might experience issues during the call</string>
-    <string name="calling__header__joining">Joining</string>
-    <string name="calling__header__outgoing_subtitle">Ringing</string>
-    <string name="calling__header__outgoing_video_subtitle">Ringing</string>
-    <string name="calling__header__incoming_subtitle">Calling</string>
-    <string name="calling__header__incoming_subtitle__video">Video calling</string>
-    <string name="calling__self_preview_unavailable">VIDEO OFF</string>
+    <string name="calling__header__joining">joining</string>
+    <string name="calling__header__outgoing_subtitle">ringing</string>
+    <string name="calling__header__outgoing_video_subtitle">ringing</string>
+    <string name="calling__header__incoming_subtitle">calling</string>
+    <string name="calling__header__incoming_subtitle__video">video calling</string>
     <string name="incoming__controls__incoming__decline">DECLINE</string>
     <string name="incoming__controls__incoming__accept">ACCEPT</string>
     <string name="incoming__controls__ongoing__hangup">HANG UP</string>
@@ -287,13 +300,20 @@
     <string name="ongoing__other_turned_off_video">%1$s TURNED OFF THE VIDEO</string>
     <string name="ongoing__other_unable_to_send_video">%1$s IS UNABLE TO SEND VIDEO</string>
     <string name="ongoing__poor_connection_message">VIDEO STOPPED DUE TO POOR CONNECTION</string>
-    <string name="ongoing__connecting">CONNECTING…</string>
+    <string name="ongoing__connecting">CONNECTING&#8230;</string>
+    <string name="calling__self_preview_unavailable">VIDEO OFF</string>
+    <string name="calling__self_preview_unavailable_long">CAMERA NOT AVAILABLE</string>
 
     <!-- Connect request -->
     <string name="connect__message">Hi %1$s,\nLet\'s connect on Wire.\n%2$s</string>
     <string name="connect_request__common_users__label">You both know</string>
     <string name="connect_request__common_users__connection_counter">+%1$s</string>
+    <plurals name="connect_request__common_users__summary">
+        <item quantity="one">%1$d person in common</item>
+        <item quantity="other">%1$d people in common</item>
+    </plurals>
     <string name="connect_request__sub_header__pending_label">Pending</string>
+    <string name="connect_request__cancel_request__label">Cancel connection request</string>
     <string name="connect_request__unblock__button__text">Unblock</string>
     <string name="send_connect_request__connect_button__text">Connect</string>
     <string name="connect_inbox__one_person__link__name">1 person waiting</string>
@@ -301,6 +321,8 @@
     <string name="connect_request__ignore_button__text">Ignore</string>
     <string name="content__message__connect_request__footer">CONNECTED</string>
     <string name="content__message__connect_request__auto_connect__footer">AUTO-CONNECTED. _LEARN MORE_</string>
+    <string name="content__message__connect_request__user_info">%1$s in Contacts</string>
+
 
     <!-- In-App Notifications -->
     <string name="in_app_notification__footer__photo">Shared a photo</string>
@@ -383,7 +405,7 @@
     <string name="content__youtube__error__text">video not found</string>
     <string name="mediaplayer__artist__placeholder">Track</string>
     <string name="mediaplayer__artist__error">Track is unavailable</string>
-    <string name="mediaplayer__source__soundcloud" translatable="false">Soundcloud</string>
+    <string name="mediaplayer__source__soundcloud" translatable="false">SoundCloud</string>
     <string name="mediaplayer__source__spotify" translatable="false">Spotify</string>
     <string name="mediaplayer__spotify__hint">Connect with Spotify</string>
     <string name="mediaplayer__open_external">Open in browser</string>
@@ -429,14 +451,16 @@
     <string name="pref_account_edit_name_title">Edit name</string>
     <string name="pref_account_details_category_title">Info</string>
     <string name="pref_account_actions_category_title">Actions</string>
+    <string name="pref_account_personal_category_title">Personal</string>
     <string name="pref_account_appearance_category_title">Appearance</string>
-    <string name="pref_account_details_category_summary">People can find you with these details. The information is encrypted and not visible to anyone else.</string>
+    <string name="pref_account_details_category_summary">People can find you with these details.</string>
+    <string name="pref_account_personal_category_summary">The information is not visible to anyone else</string>
+    <string name="pref_account_username_title">Username</string>
     <string name="pref_account_phone_title">Phone</string>
     <string name="pref_account_add_phone_title">Add phone number</string>
     <string name="pref_account_email_title">Email</string>
     <string name="pref_account_add_email_title">Add email</string>
     <string name="pref_account_sign_out_title">Log out</string>
-    <string name="pref_account_dark_theme_title">Dark Theme</string>
     <string name="pref_account_color_title">Color</string>
     <string name="pref_account_picture_title">Picture</string>
     <string name="pref_account_delete_title">Delete Account</string>
@@ -449,8 +473,11 @@
     <string name="pref_account_sign_out_warning_verify">Log out</string>
     <string name="pref_account_sign_out_warning_cancel">Cancel</string>
     <string name="pref_account_password_title">Reset Password</string>
+    <string name="pref_account_edit_name_empty_warning">Name must have 2 or more characters</string>
+    <string name="pref_account_edit_name_empty_verify">OK</string>
 
     <!-- Options -->
+    <string name="pref_options_dark_theme_title">Dark theme</string>
     <string name="pref_options_screen_title">Options</string>
     <string name="pref_options_contacts_title">Share Contacts</string>
     <string name="pref_options_contacts_summary">This helps you connect with others. We anonymize all the information and do not share it with anyone else.</string>
@@ -465,13 +492,14 @@
     <string name="pref_options_ringtones_ringtone_title">Ringtone</string>
     <string name="pref_options_ringtones_text_title">Text tone</string>
     <string name="pref_options_ringtones_ping_title">Ping</string>
-    <string name="pref_options_ringtones_default_summary">Wire Default</string>
-    <string name="pref_options_image_download_title">Download Pictures</string>
+    <string name="pref_options_ringtones_default_summary">Wire default</string>
+    <string name="pref_options_image_download_title">Download pictures</string>
     <string name="pref_options_image_download_always">Always</string>
     <string name="pref_options_image_download_wifi">Wi-Fi only</string>
     <string name="pref_options_media_category_title">Media</string>
-    <string name="pref_options_giphy_title">Giphy</string>
-    <string name="pref_options_giphy_summary">Replace message text with animated GIFs.</string>
+    <string name="pref_options_requested_category_title">By popular demand</string>
+    <string name="pref_options_cursor_send_button_title">Send button</string>
+    <string name="pref_options_cursor_send_button_summary">Disable to send via the keyboard.</string>
     <string name="pref_options_spotify_title">Connect with Spotify</string>
     <string name="pref_options_spotify_logout_title">Disconnect with Spotify</string>
     <string name="pref_options_spotify_summary">You need a Spotify Premium account.</string>
@@ -481,52 +509,52 @@
     <string name="pref_devices_screen_title">Devices</string>
     <string name="pref_current_device_category_title">Current device</string>
     <string name="pref_other_devices_category_title">Active devices</string>
-    <string name="pref_devices_summary">Click to delete</string>
+    <string name="pref_devices_summary">Tap to delete</string>
     <string name="pref_devices_current_device_category_title">Current Device</string>
     <string name="pref_devices_other_devices_category_title">Other Devices</string>
     <string name="pref_devices_device_title" translatable="false">[[%1$s]]</string>
-    <string name="pref_devices_device_activation_summary">Activated in [[%1$s]]\nfrom [[%2$s]]</string>
+    <string name="pref_devices_device_activation_summary">Activated on [[%1$s]]\nin [[%2$s]]</string>
     <string name="pref_devices_device_id">ID: %1$s</string>
     <string name="pref_devices_device_verified">Verified</string>
     <string name="pref_devices_device_not_verified">Not verified</string>
-    <string name="pref_devices_warning_summary">If you don\'t recognize a device above, remove it and reset your password in Settings > Account.</string>
+    <string name="pref_devices_warning_summary">If you don\'t recognize a device above, remove it and reset your password.</string>
     <string name="pref_devices_device_screen_title">Device details</string>
     <string name="pref_devices_device_fingerprint_category_title">Key Fingerprint</string>
-    <string name="pref_devices_device_fingerprint_summary">Wire gives every device a unique fingerprint. Compare fingerprints to verify your devices and conversations.</string>
+    <string name="pref_devices_device_fingerprint_summary">Wire gives every device a unique fingerprint. Compare them and verify your devices and conversations.</string>
     <string name="pref_devices_device_actions_category_title">Actions</string>
     <string name="pref_devices_device_trust_title">Verified</string>
     <string name="pref_devices_device_reset_session_title">Reset session</string>
-    <string name="pref_devices_device_reset_session_summary">If fingerprints don’t match, reset your secure session to make sure that the correct fingerprints are shown on all devices.</string>
+    <string name="pref_devices_device_reset_session_summary">If fingerprints don\'t match, reset the session to generate new encryption keys on both sides.</string>
     <string name="pref_devices_device_remove_title">Remove device</string>
-    <string name="pref_devices_device_remove_summary">You will be automatically logged out of that device.</string>
+    <string name="pref_devices_device_remove_summary">Remove this device if you have stopped using it. You will be logged out of this device immediately.</string>
     <string name="pref_devices_device_fingerprint_copy_description">Fingerprint</string>
     <string name="pref_devices_device_fingerprint_copy_toast">Key Fingerprint Copied</string>
 
     <!-- Advanced -->
     <string name="pref_advanced_screen_title">Advanced</string>
-    <string name="pref_advanced_debug_report_title">Submit Debug Report</string>
+    <string name="pref_advanced_debug_report_title">Submit debug report</string>
     <string name="pref_advanced_debug_report_summary">This helps Wire Support diagnose problems.</string>
     <string name="pref_advanced_analytics_title">Usage data and crash reports</string>
     <string name="pref_advanced_analytics_summary">Make Wire better by sending anonymous information.</string>
-    <string name="debug_report__title">Android Wire bug report - %1$s</string>
-    <string name="debug_report__body">Help us troubleshoot! Please tell us details of what happened, what error message you received or screenshot, and if possible the steps to reproduce the issue.\n\n</string>
+    <string name="debug_report__title">Wire debug report - %1$s</string>
+    <string name="debug_report__body">Please describe the steps required to reproduce the issue, provide screenshots if possible and send this email.\n\n</string>
 
     <!-- Support -->
     <string name="pref_support_screen_title">Support</string>
-    <string name="pref_support_website_title">Wire Support Website</string>
+    <string name="pref_support_website_title">Wire Support website</string>
     <string name="pref_support_website_url">https://support.wire.com</string>
     <string name="pref_support_contact_title">Contact Support</string>
     <string name="pref_support_contact_url">https://support.wire.com/hc/de/requests/new</string>
 
     <!-- About -->
     <string name="pref_about_screen_title">About</string>
-    <string name="pref_about_website_title">Wire Website</string>
-    <string name="pref_about_website_url">https://www.wire.com</string>
-    <string name="pref_about_tos_title">Terms Of Use</string>
+    <string name="pref_about_website_title">Wire website</string>
+    <string name="pref_about_website_url">https://wire.com</string>
+    <string name="pref_about_tos_title">Terms of Use</string>
     <string name="pref_about_tos_url">@string/url_terms_of_service</string>
     <string name="pref_about_privacy_policy_title">Privacy Policy</string>
     <string name="pref_about_privacy_policy_url">@string/url_privacy_policy</string>
-    <string name="pref_about_licenses_title">Licenses</string>
+    <string name="pref_about_licenses_title">License information</string>
     <string name="pref_about_licenses_url">@string/url_third_party_licences</string>
     <string name="pref_about_version_title">Version %s</string>
     <string name="pref_about_copyright_title">\u00A9 Wire Swiss GmbH</string>
@@ -556,13 +584,18 @@
     <string name="pref__account_action__dialog__add_phone__confirm__message">We will send a notification code to:\n%s</string>
     <string name="pref__account_action__dialog__change_email__error__invalid_email">Enter valid email</string>
     <string name="pref__account_action__dialog__change_email__title">Edit Email Address</string>
+    <string name="pref__account_action__dialog__change_username__summary">With this username, people will be able to find you on Wire without knowing your email address or phone number.</string>
+    <string name="pref__account_action__dialog__change_username__rules">At least 2 characters. a–z, 0–9, and _ only</string>
+    <string name="pref__account_action__dialog__change_username__title">Username</string>
+    <string name="pref__account_action__dialog__change_username__error_already_taken">Already taken</string>
+    <string name="pref__account_action__dialog__change_username__error_unknown">Connection error, please try again</string>
 
     <!-- URLs -->
-    <string name="url_home">https://www.wire.com</string>
-    <string name="url_terms_of_service">https://www.wire.com/legal/terms/embed/</string>
-    <string name="url_privacy_policy">https://www.wire.com/legal/privacy/embed/</string>
+    <string name="url_home">https://wire.com</string>
+    <string name="url_terms_of_service">https://wire.com/legal/terms/embed/</string>
+    <string name="url_privacy_policy">https://wire.com/legal/privacy/embed/</string>
     <string name="url__help">https://support.wire.com</string>
-    <string name="url_password_reset">https://www.wire.com/forgot/</string>
+    <string name="url_password_reset">https://account.wire.com/forgot/</string>
     <string name="url_third_party_licences">https://wire.com/legal/#licenses</string>
     <string name="url_otr_learn_why">https://wire.com/privacy/why</string>
     <string name="url_otr_learn_how">https://wire.com/privacy/how</string>
@@ -570,7 +603,8 @@
     <string name="url_otr_decryption_error_2">https://wire.com/privacy/error-2</string>
 
     <!-- No Internet connection -->
-    <string name="system_status__no_connectivity">NO INTERNET</string>
+    <string name="system_status__no_internet">NO INTERNET</string>
+    <string name="system_status__no_server_connection">CONNECTING&#8230;</string>
 
     <!-- SHARING -->
     <string name="system_status__sharing">CHOOSE A CONVERSATION</string>
@@ -637,6 +671,7 @@
     <string name="notification__message__one_to_one__shared_video">Shared a video</string>
     <string name="notification__message__one_to_one__shared_audio">Shared an audio message</string>
     <string name="notification__message__one_to_one__shared_location">Shared a location</string>
+    <string name="notification__message__one_to_one__liked">\u2764 your message</string>
 
     <!-- %1$s == username, %2$s == conversation -->
     <string name="notification__message__name__prefix__other">%1$s \u0020</string>
@@ -653,6 +688,14 @@
     <string name="notification__message__multiple__accept_request">accepted your connection request</string>
     <string name="notification__message__single__accept_request">Accepted your connection request</string>
     <string name="notification__message__group__default_conversation_name">group conversation</string>
+    <string name="notification__message__group__liked">\u2764 your message</string>
+
+    <!-- ephemeral -->
+    <string name="notification__message__ephemeral_details">Press for more</string>
+    <plurals name="notification__message__ephemeral">
+        <item quantity="one">Someone sent you a message</item>
+        <item quantity="other">Someone sent you %1$d messages</item>
+    </plurals>
 
     <!-- Others -->
     <string name="app_name">Wire</string>
@@ -781,6 +824,7 @@
     <string name="timestamp_pattern__separator_header__yesterday">Yesterday</string>
     <string name="timestamp_pattern__24h_format">HH:mm</string> <!-- 23:15 -->
     <string name="timestamp_pattern__12h_format">hh:mm a</string>
+    <string name="timestamp_pattern__week" translatable="false">w, YYYY</string>
     <string name="reg__phone_alert__button">OK</string>
     <string name="country">Country</string>
     <string name="register">Register</string>
@@ -788,8 +832,6 @@
     <string name="email_placeholder">Email</string>
     <string name="name_placeholder">Name</string>
     <string name="registration_back">Back</string>
-
-    <string name="connect_request__inbox__header">%s</string>
 
     <!-- Strings -->
     <string name="your_phone_number">Your Phone Number</string>
@@ -814,19 +856,26 @@
     <string name="hello">Hello, &lt;b&gt;%s&lt;/b&gt;</string>
     <string name="sign_in">Log In</string>
     <string name="new_reg__password_length">AT LEAST %1$s CHARACTERS</string>
+    <string name="username__set__toast_error">Error updating username</string>
 
     <!-- Giphy -->
+    <string name="giphy_preview__search_hint">Search Giphy</string>
     <string name="giphy_preview__title_search">#%s</string>
     <string name="giphy_preview__title_random">RANDOM</string>
-    <string name="giphy_preview__try_another_action">TRY ANOTHER</string>
     <string name="giphy_preview__error">NO GIFS FOUND.</string>
-    <string name="giphy_preview__message_via_random">Via giphy.com</string>
+    <string name="giphy_preview__message_via_random_trending">Via giphy.com</string>
     <string name="giphy_preview__message_via_search">%s · via giphy.com</string>
     <string name="service_giphy_name">Giphy</string>
 
     <!--Sketch-->
     <string name="drawing__tip__picture__message">TAP COLOR TO CHANGE THE BRUSH SIZE.\n\nSHAKE TO REMOVE PHOTOS.</string>
     <string name="drawing__tip__message">TAP COLOR TO CHANGE THE BRUSH SIZE.\n\nPRESS AND HOLD TO FILL AN AREA.</string>
+    <string name="add_a_sketch">Add a sketch</string>
+    <string name="sketch__emoji_keyboard__size_label__small">SMALL</string>
+    <string name="sketch__emoji_keyboard__size_label__medium">MEDIUM</string>
+    <string name="sketch__emoji_keyboard__size_label__large">LARGE</string>
+    <string name="toolbar__sketch__action_close">Close</string>
+    <string name="drawing__text_hint">TYPE A MESSAGE</string>
 
     <!-- Location sharing -->
     <string name="location_sharing__tip">Drag the map to change location</string>
@@ -836,6 +885,7 @@
     <string name="location_sharing__enable_system_location__message">Enable location in settings to show your current position</string>
     <string name="location_sharing__enable_system_location__confirm">Settings</string>
     <string name="location_sharing__enable_system_location__cancel">Cancel</string>
+    <string name="location_sharing__missing_play_services">Google Play Services is needed for location sharing</string>
 
     <!-- From SyncEngine -->
     <string name="zms_empty_conversation_name">Empty conversation</string>
@@ -891,9 +941,10 @@
     <string name="advanced_image_download_wifi_info">The picture will appear when you \n are on WI-FI again</string>
     <string name="change_settings">Change Settings</string>
     <string name="single_image__save_to_disk__error">Unable to save image, no access to external storage</string>
-    <string name="conversation_list__label_action__contacts">CONTACTS</string>
+    <string name="conversation_list__label_action__contacts">PEOPLE</string>
     <string name="conversation_list__hint_header">Conversations start here</string>
     <string name="conversation_list__hint_text">Start a conversation or invite more people to join. Call, message and share in private or with groups.</string>
+    <string name="conversation_list__action_join_call">JOIN</string>
 
     <!-- Conversation Toolbar -->
     <string name="conversation_toolbar__call_video">Video call</string>
@@ -935,27 +986,31 @@
     <string name="no_conversation_in_list__message">Tap contacts to start a conversation</string>
 
     <string name="cursor__type_a_message">TYPE A MESSAGE</string>
+    <string name="cursor__ephemeral_message">TIMED MESSAGE</string>
+    <!-- ephemeral duration e.g. "30s" or "1h"-->
+    <string name="cursor__ephemeral_message__timer_seconds">%1$ss</string>
+    <string name="cursor__ephemeral_message__timer_min">%1$sm</string>
+    <string name="cursor__ephemeral_message__timer_days">%1$sd</string>
     <string name="tooltip_record">Record Video</string>
     <string name="tooltip_camera">Add Photo</string>
     <string name="tooltip_sketch">Draw A Picture</string>
     <string name="tooltip_ping">Ping</string>
+    <string name="tooltip_emoji">Emoji</string>
     <string name="tooltip_location">Location</string>
     <string name="tooltip_more">More actions</string>
     <string name="tooltip_audio_message">Tap and hold to send an audio message</string>
     <string name="tooltip_file">Send File</string>
+    <string name="tooltip_gif">Gif</string>
     <string name="new_feature">New</string>
 
     <!-- Delete -->
-    <plurals name="conversation__action_mode__delete__dialog__title">
-        <item quantity="one">Delete message</item>
-        <item quantity="other">Delete messages</item>
-    </plurals>
-    <plurals name="conversation__action_mode__delete__dialog__message">
-        <item quantity="one">The message will only be removed from your view of the conversation. This cannot be undone.</item>
-        <item quantity="other">The messages will only be removed from your view of the conversation. This cannot be undone.</item>
-    </plurals>
-    <string name="conversation__action_mode__delete__dialog__cancel">Cancel</string>
-    <string name="conversation__action_mode__delete__dialog__ok">Delete</string>
+    <string name="conversation__message_action__delete_for_me">Delete only for me?</string>
+    <string name="conversation__message_action__delete_for_everyone">Delete for everyone?</string>
+    <string name="conversation__message_action__delete_details">This cannot be undone.</string>
+    <string name="conversation__message_action__delete__dialog__cancel">Cancel</string>
+    <string name="conversation__message_action__delete__dialog__ok">Delete</string>
+    <string name="conversation__message_action__delete__confirmation">Message Deleted</string>
+
     <string name="conversation__action_mode__copy__description">Message from %1$s</string>
     <string name="conversation__action_mode__copy__toast">Copied</string>
     <string name="conversation__action_mode__fwd__dialog__title">Preparing content</string>
@@ -978,7 +1033,70 @@
     <string name="audio_message__recording__limit_reached__message">Audio messages are limited to 25MB. Send this message?</string>
     <string name="audio_message__recording__limit_reached__confirmation">SEND</string>
 
-    <string name="hint_change_filter">Change a filter above</string>
+    <string name="hint_change_filter">Choose a filter above</string>
+
+    <string name="message_bottom_menu_action_forward">Forward</string>
+    <string name="message_bottom_menu_action_copy">Copy</string>
+    <string name="message_bottom_menu_action_edit">Edit</string>
+    <string name="message_bottom_menu_action_like">Like</string>
+    <string name="message_bottom_menu_action_unlike">Unlike</string>
+    <string name="message_bottom_menu_action_save">Save</string>
+    <string name="message_bottom_menu_action_open">Open</string>
+    <string name="message_bottom_menu_action_delete_local">Delete for me</string>
+    <string name="message_bottom_menu_action_delete_global">Delete for everyone</string>
+    <string name="likes_list__header">Liked by</string>
+    <string name="message_bottom_menu_action_save_ok">Picture saved</string>
+    <string name="message_bottom_menu_action_save_fail">Error saving image</string>
+
+    <string name="message_footer__tap_to_like">Tap to like</string>
+    <plurals name="message_footer__number_of_likes">
+        <item quantity="few">%1$d people</item>
+        <item quantity="many">%1$d people</item>
+        <item quantity="other">%1$d people</item>
+    </plurals>
+    <string name="message_footer__status__sending">Sending…</string>
+    <string name="message_footer__status__sent">%1$s \u30FB Sent</string>
+    <string name="message_footer__status__delivered">%1$s \u30FB Delivered</string>
+    <string name="message_footer__status__failed">Sending failed. _Resend_</string>
+    <string name="message_footer__status__deleted">%1$s \u30FB Deleted</string>
+
+    <string name="ephemeral_message__timeout_selection_info">SET A TIME FOR THE MESSAGE TO DISAPPEAR</string>
+
+    <string name="ephemeral_message__timeout__off">OFF</string>
+    <string name="ephemeral_message__timeout__5_sec">5 seconds</string>
+    <string name="ephemeral_message__timeout__15_sec">15 seconds</string>
+    <string name="ephemeral_message__timeout__30_sec">30 seconds</string>
+    <string name="ephemeral_message__timeout__1_min">1 minute</string>
+    <string name="ephemeral_message__timeout__5_min">5 minutes</string>
+    <string name="ephemeral_message__timeout__1_day">1 day</string>
+
+    <string name="message_footer__status__ephemeral_summary">%1$s \u30FB _%2$s left_</string>
+    <string name="prefs__username_change__username_at" translatable="false">\@</string>
+    <string name="usernames__learn_more__link">https://wire.com/support/username/</string>
+    <string name="usernames__take_over__title">Usernames are here.</string>
+    <string name="usernames__take_over__summary">Claim your unique name on Wire. _Learn more._</string>
+    <string name="usernames__take_over__choose">CHOOSE YOUR OWN</string>
+    <string name="usernames__take_over__keep">KEEP THIS ONE</string>
+    <string name="pref_account_username_empty_title">Add username</string>
+    <plurals name="message_footer__expire__days">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
+    <plurals name="message_footer__expire__hours">
+        <item quantity="zero">%1$d hours</item>
+        <item quantity="one">%1$d hour</item>
+        <item quantity="other">%1$d hours</item>
+    </plurals>
+    <plurals name="message_footer__expire__minutes">
+        <item quantity="zero">%1$d minutes</item>
+        <item quantity="one">%1$d minute</item>
+        <item quantity="other">%1$d minutes</item>
+    </plurals>
+    <plurals name="message_footer__expire__seconds">
+        <item quantity="zero">%1$d seconds</item>
+        <item quantity="one">%1$d second</item>
+        <item quantity="other">%1$d seconds</item>
+    </plurals>
+
 
 </resources>
-

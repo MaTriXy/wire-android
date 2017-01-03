@@ -39,6 +39,7 @@ import com.waz.api.CoreList;
 import com.waz.api.ErrorsList;
 import com.waz.api.IConversation;
 import com.waz.api.Message;
+import com.waz.api.OtrClient;
 import com.waz.api.SyncState;
 import com.waz.api.UpdateListener;
 import com.waz.api.Verification;
@@ -53,6 +54,7 @@ import com.waz.zclient.controllers.streammediaplayer.StreamMediaPlayerObserver;
 import com.waz.zclient.controllers.tracking.events.navigation.ClickedOnContactsHintEvent;
 import com.waz.zclient.controllers.tracking.events.navigation.OpenedArchiveEvent;
 import com.waz.zclient.controllers.tracking.events.navigation.OpenedContactsEvent;
+import com.waz.zclient.core.api.scala.ModelObserver;
 import com.waz.zclient.core.stores.conversation.ConversationChangeRequester;
 import com.waz.zclient.core.stores.conversation.ConversationStoreObserver;
 import com.waz.zclient.core.stores.conversation.InboxLoadRequester;
@@ -65,6 +67,7 @@ import com.waz.zclient.pages.main.conversationlist.views.ConversationCallback;
 import com.waz.zclient.pages.main.conversationlist.views.ListActionsView;
 import com.waz.zclient.pages.main.conversationlist.views.listview.SwipeListView;
 import com.waz.zclient.pages.main.conversationlist.views.row.ConversationListRow;
+import com.waz.zclient.pages.main.conversationlist.views.row.RightIndicatorView;
 import com.waz.zclient.pages.main.pickuser.controller.IPickUserController;
 import com.waz.zclient.pages.main.profile.ZetaPreferencesActivity;
 import com.waz.zclient.ui.pullforaction.PullForActionContainer;
@@ -73,7 +76,6 @@ import com.waz.zclient.ui.pullforaction.PullForActionMode;
 import com.waz.zclient.ui.text.TypefaceTextView;
 import com.waz.zclient.ui.utils.ResourceUtils;
 import com.waz.zclient.utils.ViewUtils;
-import com.waz.zclient.views.PebbleView;
 import net.hockeyapp.android.CrashManagerListener;
 import net.hockeyapp.android.ExceptionHandler;
 
@@ -117,7 +119,6 @@ public class ConversationListFragment extends BaseFragment<ConversationListFragm
     private SwipeListView swipeListView;
     private int pebbleViewX;
 
-    private PebbleView pebbleView;
     private View hintContainer;
     private TypefaceTextView hintHeader;
     private ListActionsView listActionsView;
@@ -129,14 +130,6 @@ public class ConversationListFragment extends BaseFragment<ConversationListFragm
     private View layoutNoConversations;
 
     private final ConversationCallback conversationCallback = new ConversationCallback() {
-
-        @Override
-        public void startPinging(KnockingEvent knockingEvent, int y) {
-            if (pebbleView != null) {
-                pebbleView.setAccentColor(knockingEvent.getColor());
-                pebbleView.startShot(pebbleViewX, y);
-            }
-        }
 
         @Override
         public void onConversationListRowSwiped(IConversation conversation, View conversationListRowView) {
@@ -163,6 +156,12 @@ public class ConversationListFragment extends BaseFragment<ConversationListFragm
             getControllerFactory().getConversationScreenController().showConversationMenu(IConversationScreenController.CONVERSATION_LIST_LONG_PRESS,
                                                                                           conversation,
                                                                                           conversationListRowView);
+        }
+    };
+    private final ModelObserver<CoreList<OtrClient>> addedDevicesModelObserver = new ModelObserver<CoreList<OtrClient>>() {
+        @Override
+        public void updated(CoreList<OtrClient> model) {
+            listActionsView.showIndicatorDot(model.size() > 0);
         }
     };
 
@@ -294,9 +293,6 @@ public class ConversationListFragment extends BaseFragment<ConversationListFragm
 
         conversationsListAdapter.setListView(swipeListView);
 
-        pebbleView = ViewUtils.getView(view, R.id.pv__conv_list);
-        pebbleView.setDirection(PebbleView.Direction.LEFT);
-
         archiveBox = ViewUtils.getView(view, R.id.ll__archiving_container);
         archiveBox.setVisibility(View.INVISIBLE);
 
@@ -368,6 +364,16 @@ public class ConversationListFragment extends BaseFragment<ConversationListFragm
         activeVoiceChannels = getStoreFactory().getZMessagingApiStore().getApi().getActiveVoiceChannels();
         activeVoiceChannels.addUpdateListener(callUpdateListener);
         conversationsListAdapter.setStreamMediaPlayerController(getControllerFactory().getStreamMediaPlayerController());
+        conversationsListAdapter.setConversationActionCallback(new RightIndicatorView.ConversationActionCallback() {
+            @Override
+            public void startCall(IConversation conversation) {
+                if (getStoreFactory() != null && !getStoreFactory().isTornDown()) {
+                    getStoreFactory().getConversationStore().setCurrentConversation(conversation,
+                                                                                    ConversationChangeRequester.CONVERSATION_LIST);
+                    getControllerFactory().getCallingController().startCall(false);
+                }
+            }
+        });
         conversationsListAdapter.setNetworkStore(getStoreFactory().getNetworkStore());
         getControllerFactory().getAccentColorController().addAccentColorObserver(this);
         if (mode == Mode.NORMAL) {
@@ -397,10 +403,12 @@ public class ConversationListFragment extends BaseFragment<ConversationListFragm
                 archiveBox.setVisibility(View.VISIBLE);
             }
         });
+        addedDevicesModelObserver.setAndUpdate(getStoreFactory().getZMessagingApiStore().getApi().getSelf().getIncomingOtrClients());
     }
 
     @Override
     public void onStop() {
+        addedDevicesModelObserver.clear();
         activeVoiceChannels.removeUpdateListener(callUpdateListener);
         getControllerFactory().getConversationListController().removeConversationListObserver(this);
         getControllerFactory().getStreamMediaPlayerController().removeStreamMediaObserver(this);

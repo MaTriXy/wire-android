@@ -41,7 +41,6 @@ import org.threeten.bp.Instant;
 public class VoiceFilterGridLayout extends FrameLayout implements
                                                        VoiceFilterController.RecordingObserver,
                                                        VoiceFilterController.PlaybackObserver {
-    public static final String TAG = VoiceFilterGridLayout.class.getSimpleName();
     private static final int NUM_OF_GRID_ROWS = 2;
     private static final int NUM_OF_GRID_COLS = 4;
     private static final long HINT_DELAY = 1500;
@@ -174,7 +173,7 @@ public class VoiceFilterGridLayout extends FrameLayout implements
                 case 2:
                     return R.string.glyph__filter_robot;
                 case 3:
-                    return R.string.glyph__filter_reverse;
+                    return R.string.glyph__filter_rollercoaster;
             }
         }
 
@@ -203,7 +202,7 @@ public class VoiceFilterGridLayout extends FrameLayout implements
                 case 2:
                     return AudioEffect.VOCODER_MED;    // Should be Robot  (glyph__filter_robot)
                 case 3:
-                    return AudioEffect.REVERSE;   //  Should be UpsideDown  (glyph__filter_reverse)
+                    return AudioEffect.PITCH_UP_DOWN_MAX;   //  Should be Rollercoaster  (glyph__filter_reverse)
             }
         }
 

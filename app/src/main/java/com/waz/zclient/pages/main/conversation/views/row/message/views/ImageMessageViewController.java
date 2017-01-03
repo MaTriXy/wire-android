@@ -20,93 +20,149 @@ package com.waz.zclient.pages.main.conversation.views.row.message.views;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Bitmap;
-import android.graphics.drawable.ColorDrawable;
-import android.support.v4.content.ContextCompat;
-import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.TextView;
+import com.waz.api.BitmapCallback;
 import com.waz.api.ImageAsset;
 import com.waz.api.LoadHandle;
+import com.waz.api.Message;
 import com.waz.api.UpdateListener;
 import com.waz.zclient.R;
-import com.waz.zclient.controllers.selection.MessageActionModeController;
+import com.waz.zclient.controllers.accentcolor.AccentColorObserver;
+import com.waz.zclient.controllers.drawing.IDrawingController;
 import com.waz.zclient.controllers.singleimage.ISingleImageController;
+import com.waz.zclient.controllers.tracking.events.conversation.ReactedToMessageEvent;
+import com.waz.zclient.controllers.userpreferences.IUserPreferencesController;
+import com.waz.zclient.core.api.scala.ModelObserver;
 import com.waz.zclient.pages.main.conversation.views.MessageViewsContainer;
-import com.waz.zclient.pages.main.conversation.views.row.message.RetryMessageViewController;
+import com.waz.zclient.pages.main.conversation.views.row.message.MessageViewController;
 import com.waz.zclient.pages.main.conversation.views.row.separator.Separator;
 import com.waz.zclient.ui.theme.ThemeUtils;
 import com.waz.zclient.ui.utils.ColorUtils;
-import com.waz.zclient.ui.views.FilledCircularBackgroundDrawable;
-import com.waz.zclient.ui.views.TouchFilterableLayout;
-import com.waz.zclient.ui.views.TouchFilterableLinearLayout;
+import com.waz.zclient.ui.utils.ResourceUtils;
+import com.waz.zclient.ui.views.EphemeralDotAnimationView;
+import com.waz.zclient.ui.views.OnDoubleClickListener;
 import com.waz.zclient.utils.LayoutSpec;
 import com.waz.zclient.utils.ViewUtils;
-import com.waz.zclient.views.LoadingIndicatorView;
 import timber.log.Timber;
 
-public class ImageMessageViewController extends RetryMessageViewController implements View.OnLongClickListener,
-                                                                                      View.OnClickListener,
-                                                                                      MessageActionModeController.Selectable {
+public class ImageMessageViewController extends MessageViewController implements AccentColorObserver,
+                                                                                 View.OnClickListener {
 
     private static final String FULL_IMAGE_LOADED = "FULL_IMAGE_LOADED";
 
-    private TouchFilterableLinearLayout view;
-    private FrameLayout selectionContainer;
-    private FrameLayout errorViewContainer;
+    private View view;
     private FrameLayout imageContainer;
     private ImageView gifImageView;
-    private ImageView polkadotView;
+    private ProgressDotsView progressDotsView;
     private ImageAsset imageAsset;
     private TextView textViewChangeSetting;
+    private View imageActionContainer;
+    private TextView sketchDrawButton;
+    private View sketchEmojiButton;
+    private View sketchTextButton;
+    private TextView fullScreenButton;
     private View wifiContainer;
-    private LoadingIndicatorView previewLoadingIndicator;
+    private EphemeralDotAnimationView ephemeralDotAnimationView;
+    private View ephemeralTypeView;
     private UpdateListener imageAssetUpdateListener;
     private LoadHandle bitmapLoadHandle;
-    private boolean previewLoaded;
+    private boolean tapButtonsVisible;
     private int paddingLeft;
     private int paddingRight;
+    private int minImageContainerWidth;
+
+    private final OnDoubleClickListener containerOnDoubleClickListener = new OnDoubleClickListener() {
+        @Override
+        public void onDoubleClick() {
+            if (message == null || message.isEphemeral()) {
+                return;
+            } else if (message.isLikedByThisUser()) {
+                message.unlike();
+                messageViewsContainer.getControllerFactory().getTrackingController().tagEvent(ReactedToMessageEvent.unlike(message.getConversation(),
+                                                                                                                           message,
+                                                                                                                           ReactedToMessageEvent.Method.DOUBLE_TAP));
+            } else {
+                message.like();
+                messageViewsContainer.getControllerFactory().getUserPreferencesController().setPerformedAction(IUserPreferencesController.LIKED_MESSAGE);
+                messageViewsContainer.getControllerFactory().getTrackingController().tagEvent(ReactedToMessageEvent.like(message.getConversation(),
+                                                                                                                         message,
+                                                                                                                         ReactedToMessageEvent.Method.DOUBLE_TAP));
+            }
+        }
+
+        @Override
+        public void onSingleClick() {
+            if (message == null) {
+                return;
+            }
+            boolean shouldOpenTapButtons = false;
+            if (footerActionCallback != null) {
+                boolean footerVisible = footerActionCallback.toggleVisibility();
+                shouldOpenTapButtons = !tapButtonsVisible && footerVisible;
+            }
+            messageViewsContainer.closeMessageViewsExtras();
+            tapButtonsVisible = shouldOpenTapButtons;
+            int visibility = tapButtonsVisible ? View.VISIBLE : View.GONE;
+            if (!(message.isEphemeral() && message.isExpired())) {
+               imageActionContainer.setVisibility(visibility);
+            }
+        }
+    };
+
+    private ModelObserver<Message> messageModelObserver = new ModelObserver<Message>() {
+        @Override
+        public void updated(Message model) {
+            checkMessageExpired();
+        }
+    };
 
     @SuppressLint("InflateParams")
     public ImageMessageViewController(Context context, MessageViewsContainer messageViewContainer) {
         super(context, messageViewContainer);
-        view = (TouchFilterableLinearLayout) View.inflate(context, R.layout.row_conversation_image, null);
-        selectionContainer = ViewUtils.getView(view, R.id.fl__single_image_container);
+        view = View.inflate(context, R.layout.row_conversation_image, null);
         imageContainer = ViewUtils.getView(view, R.id.fl__row_conversation__message_image_container);
-        imageContainer.setOnClickListener(this);
+        imageContainer.setOnClickListener(containerOnDoubleClickListener);
         imageContainer.setOnLongClickListener(this);
         gifImageView = ViewUtils.getView(view, R.id.iv__row_conversation__message_image);
-        polkadotView = ViewUtils.getView(view, R.id.iv__row_conversation__message_polkadots);
-        errorViewContainer = ViewUtils.getView(view, R.id.fl__row_conversation__message_error_container);
-        previewLoadingIndicator = ViewUtils.getView(view, R.id.lbv__row_conversation__message_polkadots);
+        progressDotsView = ViewUtils.getView(view, R.id.pdv__row_conversation__image_placeholder_dots);
         textViewChangeSetting = ViewUtils.getView(view, R.id.ttv__conversation_row__image__change_settings);
         wifiContainer = ViewUtils.getView(view, R.id.ll__conversation_row__image__wifi_warning);
         wifiContainer.setVisibility(View.GONE);
-        TextView unsentView = ViewUtils.getView(view, R.id.v__row_conversation__error);
-        final int circleFillColor = ThemeUtils.isDarkTheme(context) ? context.getResources().getColor(R.color.content__image__progress_circle_background_dark)
-                                                                    : context.getResources().getColor(R.color.content__image__progress_circle_background_light);
-        final int circleRadius = context.getResources().getDimensionPixelSize(R.dimen.content__message__unsend_indicator_background_radius);
-        final int circleDiameter = 2 * circleRadius;
-        unsentView.setBackground(new FilledCircularBackgroundDrawable(circleFillColor, circleDiameter));
+        imageActionContainer = ViewUtils.getView(view, R.id.fl__row_conversation__image_actions);
+        fullScreenButton = ViewUtils.getView(view, R.id.gtv__row_conversation__image_fullscreen);
+        sketchDrawButton = ViewUtils.getView(view, R.id.gtv__row_conversation__drawing_button__sketch);
+        sketchEmojiButton = ViewUtils.getView(view, R.id.gtv__row_conversation__drawing_button__emoji);
+        sketchTextButton = ViewUtils.getView(view, R.id.gtv__row_conversation__drawing_button__text);
 
-        previewLoadingIndicator.setColor(messageViewContainer.getControllerFactory().getAccentColorController().getColor());
-        previewLoadingIndicator.setType(LoadingIndicatorView.INFINITE_LOADING_BAR);
-        previewLoadingIndicator.setVisibility(View.GONE);
+        imageActionContainer.setVisibility(View.GONE);
+        fullScreenButton.setOnClickListener(this);
+        sketchDrawButton.setOnClickListener(this);
+        sketchEmojiButton.setOnClickListener(this);
+        sketchTextButton.setOnClickListener(this);
+
+        tapButtonsVisible = false;
+        ephemeralDotAnimationView = ViewUtils.getView(view, R.id.edav__ephemeral_view);
+        ephemeralTypeView = ViewUtils.getView(view, R.id.gtv__row_conversation__image__ephemeral_type);
+        ephemeralTypeView.setVisibility(View.GONE);
 
         paddingLeft = (int) context.getResources().getDimension(R.dimen.content__padding_left);
         paddingRight = (int) context.getResources().getDimension(R.dimen.content__padding_right);
+        minImageContainerWidth = (int) context.getResources().getDimension(R.dimen.content__min_container_width);
 
         afterInit();
     }
 
     @Override
     public void onSetMessage(Separator separator) {
-        super.onSetMessage(separator);
+        containerOnDoubleClickListener.reset();
         wifiContainer.setVisibility(View.GONE);
         gifImageView.setTag(message.getId());
         imageAsset = message.getImage();
+        ephemeralDotAnimationView.setMessage(message);
 
         int displayWidth;
         if (ViewUtils.isInPortrait(context)) {
@@ -119,6 +175,10 @@ public class ImageMessageViewController extends RetryMessageViewController imple
 
         // no left/right padding for full width images
         boolean imageViewSidePadding = originalWidth < displayWidth;
+
+        final int finalWidth = computeFinalWidth(originalWidth, displayWidth, imageViewSidePadding);
+        final int finalHeight = getScaledHeight(originalWidth, originalHeight, finalWidth);
+
         if (!imageViewSidePadding) {
             ViewUtils.setPaddingLeftRight(imageContainer, 0);
         } else {
@@ -129,22 +189,17 @@ public class ImageMessageViewController extends RetryMessageViewController imple
                 ViewUtils.setWidth(imageContainer, imageContainer.getContext().getResources().getDimensionPixelSize(R.dimen.content__width));
             } else {
                 ViewUtils.setPaddingLeft(imageContainer, paddingLeft);
-                ViewUtils.setPaddingRight(imageContainer, paddingRight);
+                ViewUtils.setPaddingRight(imageContainer, getAdjustedRightPadding(displayWidth, finalWidth));
                 imageContainer.setLayoutParams(new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
-                                                                            FrameLayout.LayoutParams.MATCH_PARENT));
+                    FrameLayout.LayoutParams.MATCH_PARENT));
             }
         }
-
-        final int finalWidth = computeFinalWidth(originalWidth, displayWidth, imageViewSidePadding);
-        final int finalHeight = getScaledHeight(originalWidth, originalHeight, finalWidth);
 
         ViewGroup.LayoutParams layoutParams = gifImageView.getLayoutParams();
         layoutParams.width = finalWidth;
         layoutParams.height = finalHeight;
         gifImageView.setLayoutParams(layoutParams);
-        polkadotView.setLayoutParams(layoutParams);
-        ViewUtils.setWidth(previewLoadingIndicator, finalWidth);
-
+        progressDotsView.setLayoutParams(layoutParams);
 
         if (imageAsset == null) {
             Timber.e("No imageAsset for message with id='%s' available.", message.getId());
@@ -160,22 +215,22 @@ public class ImageMessageViewController extends RetryMessageViewController imple
         imageAsset.addUpdateListener(imageAssetUpdateListener);
         loadBitmap(finalWidth);
 
+        messageViewsContainer.getControllerFactory().getAccentColorController().addAccentColorObserver(this);
+        messageModelObserver.setAndUpdate(message);
     }
 
     private void loadBitmap(int finalViewWidth) {
-        previewLoaded = false;
-
         if (bitmapLoadHandle != null) {
             bitmapLoadHandle.cancel();
         }
+        if (message.isEphemeral() && message.isExpired()) {
+            return;
+        }
 
-        bitmapLoadHandle = imageAsset.getBitmap(finalViewWidth, new ImageAsset.BitmapCallback() {
+        showProgressDots();
+        bitmapLoadHandle = imageAsset.getBitmap(finalViewWidth, new BitmapCallback() {
             @Override
-            public void onBitmapLoaded(Bitmap bitmap, boolean isPreview) {
-                if ((previewLoaded || gifImageView.getDrawable() != null) && isPreview) {
-                    return;
-                }
-
+            public void onBitmapLoaded(Bitmap bitmap) {
                 if (gifImageView == null ||
                     message == null ||
                     !gifImageView.getTag().equals(message.getId()) ||
@@ -183,62 +238,59 @@ public class ImageMessageViewController extends RetryMessageViewController imple
                     return;
                 }
 
-                if (isPreview) {
-                    showPreview(bitmap);
-
-                    boolean hasWifi = messageViewsContainer.getStoreFactory().getNetworkStore().hasWifiConnection();
-                    boolean downloadPolicyWifiOnly = messageViewsContainer.getControllerFactory().getUserPreferencesController().isImageDownloadPolicyWifiOnly();
-
-                    if (!hasWifi && downloadPolicyWifiOnly) {
-                        wifiContainer.setVisibility(View.VISIBLE);
-                        textViewChangeSetting.setOnClickListener(new View.OnClickListener() {
-                            @Override
-                            public void onClick(View v) {
-                                if (!messageViewsContainer.isTornDown()) {
-                                    messageViewsContainer.openSettings();
-                                }
-                            }
-                        });
- 
-                        previewLoadingIndicator.setVisibility(View.GONE);
-                        previewLoadingIndicator.hide();
-                    }
+                view.setTag(FULL_IMAGE_LOADED);
+                if (gifImageView.getDrawable() != null) {
+                    gifImageView.setImageBitmap(bitmap);
                 } else {
-                    view.setTag(FULL_IMAGE_LOADED);
-                    if (gifImageView.getDrawable() != null) {
-                        gifImageView.setImageBitmap(bitmap);
-                    } else {
-                        showFinalImage(bitmap);
-                    }
+                    showFinalImage(bitmap);
                 }
             }
 
-            @Override public void onBitmapLoadingFailed() { }
+            @Override public void onBitmapLoadingFailed(BitmapLoadingFailed reason) {
+                if (reason == BitmapLoadingFailed.DOWNLOAD_ON_WIFI_ONLY) {
+                    setWifiContainerVisible(true);
+                }
+            }
         });
     }
 
-    private void showPreview(final Bitmap bitmap) {
-        previewLoaded = true;
-        polkadotView.setAlpha(1f);
-        polkadotView.setVisibility(View.VISIBLE);
-        polkadotView.setImageBitmap(bitmap);
+    private void showProgressDots() {
+        progressDotsView.setAlpha(1f);
+        progressDotsView.setVisibility(View.VISIBLE);
         gifImageView.setVisibility(View.GONE);
-        previewLoadingIndicator.setVisibility(View.VISIBLE);
-        previewLoadingIndicator.show();
+    }
+
+    private void setWifiContainerVisible(boolean show) {
+        boolean hasWifi = messageViewsContainer.getStoreFactory().getNetworkStore().hasWifiConnection();
+        boolean downloadPolicyWifiOnly = messageViewsContainer.getControllerFactory().getUserPreferencesController().isImageDownloadPolicyWifiOnly();
+
+        if (!hasWifi && downloadPolicyWifiOnly && show) {
+            wifiContainer.setVisibility(View.VISIBLE);
+            textViewChangeSetting.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    if (!messageViewsContainer.isTornDown()) {
+                        messageViewsContainer.openSettings();
+                    }
+                }
+            });
+        } else {
+            wifiContainer.setVisibility(View.GONE);
+        }
     }
 
     private void showFinalImage(final Bitmap bitmap) {
+        if (message.isEphemeral() && message.isExpired()) {
+            return;
+        }
         gifImageView.setImageBitmap(bitmap);
         gifImageView.setAlpha(0f);
         gifImageView.setVisibility(View.VISIBLE);
-        previewLoadingIndicator.hide();
-        previewLoadingIndicator.setVisibility(View.GONE);
 
-        int crossFadeDuration = context.getResources().getInteger(R.integer.content__image__polka_crossfade_duration);
-        int showFinalDirectlyDuration = context.getResources().getInteger(R.integer.content__image__directly_final_duration);
-        int fadingDuration = previewLoaded ? crossFadeDuration : showFinalDirectlyDuration;
-        int polkaShowDuration = context.getResources().getInteger(R.integer.content__image__polka_show_duration);
-        int startDelay = previewLoaded ? polkaShowDuration : 0;
+        int fadingDuration = context.getResources().getInteger(R.integer.content__image__directly_final_duration);
+        int startDelay = 0;
+
+        setWifiContainerVisible(false);
 
         gifImageView.animate()
                     .alpha(1f)
@@ -246,17 +298,17 @@ public class ImageMessageViewController extends RetryMessageViewController imple
                     .setStartDelay(startDelay)
                     .start();
 
-        polkadotView.animate()
-                    .alpha(0f)
-                    .setDuration(fadingDuration)
-                    .setStartDelay(startDelay)
-                    .withEndAction(new Runnable() {
+        progressDotsView.animate()
+                        .alpha(0f)
+                        .setDuration(fadingDuration)
+                        .setStartDelay(startDelay)
+                        .withEndAction(new Runnable() {
                         @Override
                         public void run() {
-                            polkadotView.setVisibility(View.GONE);
+                            progressDotsView.setVisibility(View.GONE);
                         }
                     })
-                    .start();
+                        .start();
 
     }
 
@@ -273,25 +325,33 @@ public class ImageMessageViewController extends RetryMessageViewController imple
         return (int) (originalHeight * scaleFactor);
     }
 
+    private int getAdjustedRightPadding(int displayWidth, int finalWidth) {
+        int containerWidth = Math.max(finalWidth, minImageContainerWidth);
+        return displayWidth - containerWidth - paddingLeft;
+    }
+
     @Override
-    public TouchFilterableLayout getView() {
+    public View getView() {
         return view;
     }
 
     @Override
     public void recycle() {
-        errorViewContainer.clearAnimation();
-        errorViewContainer.setVisibility(View.VISIBLE);
+        if (!messageViewsContainer.isTornDown()) {
+            messageViewsContainer.getControllerFactory().getAccentColorController().removeAccentColorObserver(this);
+        }
+        messageModelObserver.clear();
+        containerOnDoubleClickListener.reset();
+        ephemeralDotAnimationView.setMessage(null);
         gifImageView.animate().cancel();
-        polkadotView.animate().cancel();
+        imageActionContainer.setVisibility(View.GONE);
         gifImageView.setVisibility(View.INVISIBLE);
         gifImageView.setImageDrawable(null);
-        previewLoadingIndicator.hide();
-        previewLoadingIndicator.setVisibility(View.GONE);
+        tapButtonsVisible = false;
         textViewChangeSetting.setOnClickListener(null);
         wifiContainer.setVisibility(View.GONE);
-        previewLoaded = false;
         view.setTag(null);
+        progressDotsView.setExpired(false);
         if (imageAsset != null) {
             imageAsset.removeUpdateListener(imageAssetUpdateListener);
         }
@@ -300,62 +360,79 @@ public class ImageMessageViewController extends RetryMessageViewController imple
             bitmapLoadHandle.cancel();
             bitmapLoadHandle = null;
         }
-        polkadotView.setImageBitmap(null);
         super.recycle();
     }
 
     @Override
     public void onAccentColorHasChanged(Object sender, int color) {
-        super.onAccentColorHasChanged(sender, color);
-        if (previewLoadingIndicator != null) {
-            previewLoadingIndicator.setColor(color);
+        if (message != null &&
+            message.isEphemeral() &&
+            message.isExpired()) {
+            imageContainer.setBackgroundColor(ColorUtils.injectAlpha(ThemeUtils.getEphemeralBackgroundAlpha(context),
+                                                                     messageViewsContainer.getControllerFactory().getAccentColorController().getColor()));
         }
+        ephemeralDotAnimationView.setPrimaryColor(color);
+        ephemeralDotAnimationView.setSecondaryColor(ColorUtils.injectAlpha(ResourceUtils.getResourceFloat(context.getResources(), R.dimen.ephemeral__accent__timer_alpha),
+                                                                           color));
+        progressDotsView.setAccentColor(ColorUtils.injectAlpha(ThemeUtils.getEphemeralBackgroundAlpha(context), color));
     }
 
     @Override
-    public boolean onLongClick(View v) {
-        if (message == null ||
-            messageViewsContainer == null ||
-            messageViewsContainer.isTornDown() ||
-            getSelectionView() == null) {
-            return false;
+    public void onClick(View view) {
+        switch (view.getId()) {
+            case R.id.gtv__row_conversation__image_fullscreen:
+                boolean fullImageLoaded = this.view != null && ImageMessageViewController.FULL_IMAGE_LOADED.equals(this.view.getTag());
+                if (!fullImageLoaded) {
+                    return;
+                }
+                final ISingleImageController singleImageController = messageViewsContainer.getControllerFactory().getSingleImageController();
+                singleImageController.setViewReferences(gifImageView);
+                singleImageController.showSingleImage(message);
+                break;
+            case R.id.gtv__row_conversation__drawing_button__sketch:
+                messageViewsContainer.getControllerFactory().getDrawingController().showDrawing(message.getImage(),
+                                                                                                IDrawingController.DrawingDestination.SINGLE_IMAGE_VIEW,
+                                                                                                IDrawingController.DrawingMethod.DRAW);
+                break;
+            case R.id.gtv__row_conversation__drawing_button__emoji:
+                messageViewsContainer.getControllerFactory().getDrawingController().showDrawing(message.getImage(),
+                                                                                                IDrawingController.DrawingDestination.SINGLE_IMAGE_VIEW,
+                                                                                                IDrawingController.DrawingMethod.EMOJI);
+                break;
+            case R.id.gtv__row_conversation__drawing_button__text:
+                messageViewsContainer.getControllerFactory().getDrawingController().showDrawing(message.getImage(),
+                                                                                                IDrawingController.DrawingDestination.SINGLE_IMAGE_VIEW,
+                                                                                                IDrawingController.DrawingMethod.TEXT);
+                break;
+
         }
-        messageViewsContainer.getControllerFactory().getMessageActionModeController().selectMessage(message);
-        return true;
     }
 
-    @Override
-    public void onClick(View v) {
-        boolean fullImageLoaded = view != null && ImageMessageViewController.FULL_IMAGE_LOADED.equals(view.getTag());
-        if (!fullImageLoaded) {
-            return;
-        }
-        View clickedImageSendingIndicator = errorViewContainer;
-        if (clickedImageSendingIndicator != null && clickedImageSendingIndicator.getVisibility() == View.GONE) {
-            clickedImageSendingIndicator = null;
-        }
-        final ISingleImageController singleImageController = messageViewsContainer.getControllerFactory().getSingleImageController();
-        singleImageController.setViewReferences(gifImageView, clickedImageSendingIndicator);
-        singleImageController.showSingleImage(message);
-    }
-
-    @Override
-    protected void setSelected(boolean selected) {
-        super.setSelected(selected);
-        if (message == null ||
-            messageViewsContainer == null ||
-            messageViewsContainer.isTornDown() ||
-            getSelectionView() == null) {
-            return;
-        }
-        final int accentColor = messageViewsContainer.getControllerFactory().getAccentColorController().getColor();
-        int targetAccentColor;
-        if (selected) {
-            targetAccentColor = ColorUtils.injectAlpha(selectionAlpha, accentColor);
+    private void checkMessageExpired() {
+        if (message.isEphemeral() && message.isExpired()) {
+            imageContainer.setBackgroundColor(ColorUtils.injectAlpha(ThemeUtils.getEphemeralBackgroundAlpha(context),
+                                                                     messageViewsContainer.getControllerFactory().getAccentColorController().getColor()));
+            gifImageView.setVisibility(View.INVISIBLE);
+            gifImageView.setImageBitmap(null);
+            progressDotsView.setVisibility(View.INVISIBLE);
+            if (bitmapLoadHandle != null) {
+                bitmapLoadHandle.cancel();
+            }
+            imageActionContainer.setVisibility(View.GONE);
+            tapButtonsVisible = false;
+            ephemeralTypeView.setVisibility(View.VISIBLE);
+            progressDotsView.setExpired(true);
         } else {
-            targetAccentColor = ContextCompat.getColor(context, R.color.transparent);
+            imageContainer.setBackground(null);
+            gifImageView.setVisibility(View.VISIBLE);
+            progressDotsView.setVisibility(View.VISIBLE);
+            ephemeralTypeView.setVisibility(View.GONE);
+            progressDotsView.setExpired(false);
         }
-        selectionContainer.setForeground(new ColorDrawable(targetAccentColor));
-        selectionContainer.setForegroundGravity(Gravity.FILL);
+    }
+
+    public void closeExtras() {
+        imageActionContainer.setVisibility(View.GONE);
+        tapButtonsVisible = false;
     }
 }

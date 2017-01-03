@@ -17,9 +17,22 @@
  */
 package com.waz.zclient.utils;
 
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.PorterDuff;
+import android.net.Uri;
+
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Locale;
 
 public class StringUtils {
+
+    private static Paint paint = new Paint();
 
     public static boolean isBlank(CharSequence cs) {
         int strLen;
@@ -55,5 +68,105 @@ public class StringUtils {
     public static String formatTimeMilliSeconds(long totalMilliSeconds) {
         long totalSeconds = totalMilliSeconds / 1000;
         return formatTimeSeconds(totalSeconds);
+    }
+
+    public static Uri normalizeUri(Uri uri) {
+        if (uri == null) {
+            return uri;
+        }
+        Uri normalized = uri.normalizeScheme();
+        if (normalized.getAuthority() != null) {
+            normalized = normalized
+                .buildUpon()
+                .encodedAuthority(normalized.getAuthority().toLowerCase(Locale.getDefault()))
+                .build();
+        }
+        return Uri.parse(trimLinkPreviewUrls(normalized));
+    }
+
+    public static String trimLinkPreviewUrls(Uri uri) {
+        if (uri == null) {
+            return "";
+        }
+        String str = uri.toString();
+        str = stripPrefix(str, "http://");
+        str = stripPrefix(str, "https://");
+        str = stripPrefix(str, "www\\.");
+        str = stripSuffix(str, "/");
+        return str;
+    }
+
+    public static String stripPrefix(String str, String prefixRegularExpression) {
+        String regex = "^" + prefixRegularExpression;
+        String[] matches = str.split(regex);
+        if (matches.length >= 2) {
+            return matches[1];
+        }
+        return str;
+    }
+
+    public static String stripSuffix(String str, String suffixRegularExpression) {
+        String regex = suffixRegularExpression + "$";
+        String[] matches = str.split(regex);
+        if (matches.length > 0) {
+            return matches[0];
+        }
+        return str;
+    }
+
+    public static boolean isRTL() {
+        return isRTL(Locale.getDefault());
+    }
+
+    public static boolean isRTL(Locale locale) {
+        final int directionality = Character.getDirectionality(locale.getDisplayName().charAt(0));
+        return directionality == Character.DIRECTIONALITY_RIGHT_TO_LEFT ||
+               directionality == Character.DIRECTIONALITY_RIGHT_TO_LEFT_ARABIC;
+    }
+
+    public static Collection<String> getMissingInFont(Collection<String> strings) {
+        TextDrawing template = new TextDrawing();
+        template.set("\uFFFF"); // missing char
+
+        TextDrawing emoji = new TextDrawing();
+        ArrayList<String> missing = new ArrayList<>();
+        for (String s : strings) {
+            emoji.set(s);
+            if (template.equals(emoji)) {
+                missing.add(s);
+            }
+        }
+        return missing;
+    }
+
+    public static String formatUsername(String username) {
+        return "@" + username;
+    }
+
+    public static String truncate(String base, int limit) {
+        return base.substring(0, Math.min(limit, base.length()));
+    }
+
+    private static class TextDrawing {
+        private final Bitmap bitmap = Bitmap.createBitmap(50, 50, Bitmap.Config.ALPHA_8);
+        private final Canvas canvas = new Canvas(bitmap);
+        private final ByteBuffer buffer = ByteBuffer.allocate(bitmap.getByteCount());
+
+        public void set(String text) {
+            canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR);
+            canvas.drawText(text, 0, 50 / 2, paint);
+            buffer.rewind();
+            bitmap.copyPixelsToBuffer(buffer);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            return o != null && (o instanceof TextDrawing) && Arrays.equals(buffer.array(), ((TextDrawing) o).buffer.array());
+        }
+
+        @Override
+        public int hashCode() {
+            return Arrays.hashCode(buffer.array());
+        }
     }
 }

@@ -21,6 +21,7 @@
 <resources>
     <!-- Typeface Definitions -->
     <string translatable="false" name="wire__glyphs" >wire_glyphs.otf</string>
+    <string translatable="false" name="wire__typeface__redacted">redacted_script_regular.ttf</string>
     <string translatable="false" name="wire__typeface__light">Roboto_Light</string>
     <string translatable="false" name="wire__typeface__thin">Roboto_Thin</string>
     <string translatable="false" name="wire__typeface__regular">Roboto_Regular</string>
@@ -55,7 +56,6 @@
     <string translatable="false" name="onboarding_hint__app_map__subtitle__font">@string/wire__typeface__medium</string>
     <string translatable="false" name="option_menu__font_name">@string/wire__typeface__light</string>
     <string translatable="false" name="sharing_indicator__font">@string/wire__typeface__bold</string>
-    <string translatable="false" name="sharing__image_preview__title__font">@string/wire__typeface__light</string>
     <string translatable="false" name="single_image_message__name__font">@string/wire__typeface__bold</string>
     <string translatable="false" name="single_image_message__date__font">@string/wire__typeface__light</string>
 
@@ -76,15 +76,17 @@
     <string translatable="false" name="pref_account_name_key">pref_account_name_key</string>
     <string translatable="false" name="pref_account_details_category_key">pref_account_details_category_key</string>
     <string translatable="false" name="pref_account_actions_category_key">pref_account_actions_category_key</string>
+    <string translatable="false" name="pref_account_personal_category_key">pref_account_personal_category_key</string>
+    <string translatable="false" name="pref_account_username_key">pref_account_username_key</string>
     <string translatable="false" name="pref_account_phone_key">pref_account_phone_key</string>
     <string translatable="false" name="pref_account_email_key">pref_account_email_key</string>
     <string translatable="false" name="pref_account_sign_out_key">pref_account_sign_out_key</string>
     <string translatable="false" name="pref_account_delete_key">pref_account_delete_key</string>
     <string translatable="false" name="pref_account_password_key">PREF_RESET_PASSWORD</string>
     <string translatable="false" name="pref_account_theme_key">pref_theme_key</string>
-    <string translatable="false" name="pref_account_theme_switch_key">pref_theme_switch_key</string>
+    <string translatable="false" name="pref_options_theme_switch_key">pref_theme_switch_key</string>
     <string translatable="false" name="pref_options_spotify_key">PREF_SPOTIFY_LOGIN</string>
-    <string translatable="false" name="pref_options_giphy_key">pref_services_giphy_key</string>
+    <string translatable="false" name="pref_options_cursor_send_button_key">pref_cursor_send_button_key</string>
     <string translatable="false" name="pref_options_contacts_key">@string/pref_share_contacts_key</string>
     <string translatable="false" name="pref_options_devices_key">pref_privacy_devices_key</string>
     <string translatable="false" name="pref_devices_current_device_category_key">pref_current_device_category_key</string>
@@ -124,6 +126,7 @@
     <string translatable="false" name="pref_about_copyright_key">pref_about_copyright_key</string>
     <string translatable="false" name="pref_options_alerts_category_key">pref_options_alerts_category_key</string>
     <string translatable="false" name="pref_options_media_category_key">pref_options_media_category_key</string>
+    <string translatable="false" name="pref_options_requested_category_key">pref_options_requested_category_key</string>
     <string translatable="false" name="pref_support_website_key">pref_support_website_key</string>
     <string translatable="false" name="pref_support_contact_key">pref_support_contact_key</string>
 
@@ -156,5 +159,21 @@
     <string translatable="false" name="pref_dev_auto_answer_call_summary">App restart needed to enable AVS audio test flag</string>
     <string translatable="false" name="pref_dev_otr_only_title">E2EE only</string>
     <string translatable="false" name="pref_dev_otr_only_summary">Send only encrypted messages</string>
+    <string translatable="false" name="pref_dev_version_info_id_key">USER_PREFS_DEV_VERSIONS_ID</string>
+    <string translatable="false" name="pref_dev_version_info_id_title">Versions</string>
+    <string translatable="false" name="pref_dev_assets_v3_key">@string/zms_assets_v3</string>
+    <string translatable="false" name="pref_dev_assets_v3_title">Send assets using API v3</string>
+
+
+    <!--Notifications preferences-->
+    <string translatable="false" name="pref_dev_category_notifications_key">PREF_NOTIFICATIONS_CATEGORY</string>
+    <string translatable="false" name="pref_dev_category_notifications_title">Notifications</string>
+    <string translatable="false" name="pref_dev_gcm_enabled_key">@string/zms_gcm_enabled</string>
+    <string translatable="false" name="pref_dev_gcm_enabled_summary">Enable to receive notifications through GCM. Disable to rely on WebSockets only.</string>
+    <string translatable="false" name="pref_dev_gcm_enabled_title">GCM Enabled</string>
+    <string translatable="false" name="pref_dev_websocket_ping_interval_key">@string/zms_websocket_ping_interval</string>
+    <string translatable="false" name="pref_dev_websocket_ping_interval_summary">Change the frequency of checking the connection to the server. Note that increasing the frequency may have a negative impact on battery life.</string>
+    <string translatable="false" name="pref_dev_websocket_ping_interval_title">WebSocket Ping Frequency (ms)</string>
+
 </resources>
 

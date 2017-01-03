@@ -30,33 +30,41 @@ import android.widget.Toast;
 import com.waz.api.Asset;
 import com.waz.api.AssetStatus;
 import com.waz.api.Message;
+import com.waz.api.NetworkMode;
 import com.waz.api.PlaybackControls;
 import com.waz.zclient.R;
-import com.waz.zclient.controllers.selection.MessageActionModeController;
-import com.waz.zclient.core.controllers.tracking.events.media.PlayedAudioMessageEvent;
+import com.waz.zclient.controllers.accentcolor.AccentColorObserver;
+import com.waz.zclient.controllers.tracking.events.conversation.ReactedToMessageEvent;
+import com.waz.zclient.controllers.userpreferences.IUserPreferencesController;
 import com.waz.zclient.core.api.scala.ModelObserver;
+import com.waz.zclient.core.controllers.tracking.events.media.PlayedAudioMessageEvent;
+import com.waz.zclient.core.stores.network.DefaultNetworkAction;
 import com.waz.zclient.pages.main.conversation.views.MessageViewsContainer;
 import com.waz.zclient.pages.main.conversation.views.row.message.MessageViewController;
 import com.waz.zclient.pages.main.conversation.views.row.separator.Separator;
-import com.waz.zclient.ui.views.TouchFilterableLayout;
+import com.waz.zclient.ui.theme.ThemeUtils;
+import com.waz.zclient.ui.utils.ColorUtils;
+import com.waz.zclient.ui.utils.ResourceUtils;
+import com.waz.zclient.ui.views.EphemeralDotAnimationView;
 import com.waz.zclient.utils.StringUtils;
 import com.waz.zclient.utils.ViewUtils;
 import com.waz.zclient.views.AssetActionButton;
+import com.waz.zclient.ui.views.OnDoubleClickListener;
 import org.threeten.bp.Duration;
 
 import static android.view.View.GONE;
 import static android.view.View.VISIBLE;
 
-public class AudioMessageViewController extends MessageViewController implements View.OnClickListener,
-                                                                                 View.OnLongClickListener,
-                                                                                 MessageActionModeController.Selectable {
+public class AudioMessageViewController extends MessageViewController implements AccentColorObserver {
 
-    private TouchFilterableLayout view;
+    private View view;
     private AssetActionButton actionButton;
-    private View progressDotsView;
+    private ProgressDotsView progressDotsView;
     private TextView audioDurationText;
     private SeekBar audioSeekBar;
     private LinearLayout selectionContainer;
+    private EphemeralDotAnimationView ephemeralDotAnimationView;
+    private View ephemeralTypeView;
 
     private Asset asset;
     private PlaybackControls playbackControls;
@@ -64,9 +72,11 @@ public class AudioMessageViewController extends MessageViewController implements
     private final ModelObserver<Message> messageModelObserver = new ModelObserver<Message>() {
         @Override
         public void updated(Message message) {
-            if (asset == null) {
+            if (message.isEphemeral() && message.isExpired()) {
+                messageExpired();
+            } else if (asset == null) {
                 asset = message.getAsset();
-                actionButton.setOnClickListener(AudioMessageViewController.this);
+                actionButton.setOnClickListener(actionButtonOnClickListener);
                 assetModelObserver.setAndUpdate(asset);
             }
         }
@@ -86,6 +96,11 @@ public class AudioMessageViewController extends MessageViewController implements
     private final ModelObserver<PlaybackControls> playbackControlsModelObserver = new ModelObserver<PlaybackControls>() {
         @Override
         public void updated(PlaybackControls playbackControls) {
+            if (playbackControls.isPlaying()) {
+                messageViewsContainer.getControllerFactory().getGlobalLayoutController().keepScreenAwake();
+            } else {
+                messageViewsContainer.getControllerFactory().getGlobalLayoutController().resetScreenAwakeState();
+            }
             actionButton.setPlaybackControls(playbackControls);
             String time;
             if (playbackControls.getDuration().equals(playbackControls.getPlayhead()) || playbackControls.getPlayhead().isZero()) {
@@ -101,14 +116,65 @@ public class AudioMessageViewController extends MessageViewController implements
         }
     };
 
+    private final OnDoubleClickListener containerOnClickListener = new OnDoubleClickListener() {
+        @Override
+        public void onDoubleClick() {
+            if (message.isEphemeral()) {
+                return;
+            } else if (message.isLikedByThisUser()) {
+                message.unlike();
+                messageViewsContainer.getControllerFactory().getTrackingController().tagEvent(ReactedToMessageEvent.unlike(message.getConversation(),
+                                                                                                                         message,
+                                                                                                                         ReactedToMessageEvent.Method.DOUBLE_TAP));
+            } else {
+                message.like();
+                messageViewsContainer.getControllerFactory().getUserPreferencesController().setPerformedAction(IUserPreferencesController.LIKED_MESSAGE);
+                messageViewsContainer.getControllerFactory().getTrackingController().tagEvent(ReactedToMessageEvent.like(message.getConversation(),
+                                                                                                             message,
+                                                                                                             ReactedToMessageEvent.Method.DOUBLE_TAP));
+            }
+        }
+
+        @Override
+        public void onSingleClick() {
+            if (footerActionCallback != null) {
+                footerActionCallback.toggleVisibility();
+            }
+        }
+    };
+
+    private final View.OnClickListener actionButtonOnClickListener = new OnDoubleClickListener()  {
+        @Override
+        public void onDoubleClick() {
+            if (message == null || message.isEphemeral()) {
+                return;
+            } else if (message.isLikedByThisUser()) {
+                message.unlike();
+            } else {
+                messageViewsContainer.getControllerFactory().getUserPreferencesController().setPerformedAction(IUserPreferencesController.LIKED_MESSAGE);
+                message.like();
+            }
+        }
+
+        @Override
+        public void onSingleClick() {
+            onActionClick();
+        }
+    };
+
     public AudioMessageViewController(Context context, MessageViewsContainer messageViewsContainer) {
         super(context, messageViewsContainer);
-        view = (TouchFilterableLayout) View.inflate(context, R.layout.row_conversation_audio_message, null);
-        actionButton = ViewUtils.getView((View) view, R.id.aab__row_conversation__audio_button);
-        progressDotsView = ViewUtils.getView((View) view, R.id.pdv__row_conversation__audio_placeholder_dots);
-        audioDurationText = ViewUtils.getView((View) view, R.id.ttv__row_conversation__audio_duration);
-        audioSeekBar = ViewUtils.getView((View) view, R.id.sb__audio_progress);
-        selectionContainer = ViewUtils.getView((View) view, R.id.tfll__audio_message_container);
+        view = View.inflate(context, R.layout.row_conversation_audio_message, null);
+        actionButton = ViewUtils.getView(view, R.id.aab__row_conversation__audio_button);
+        progressDotsView = ViewUtils.getView(view, R.id.pdv__row_conversation__audio_placeholder_dots);
+        audioDurationText = ViewUtils.getView(view, R.id.ttv__row_conversation__audio_duration);
+        audioSeekBar = ViewUtils.getView(view, R.id.sb__audio_progress);
+        selectionContainer = ViewUtils.getView(view, R.id.tfll__audio_message_container);
+        selectionContainer.setOnLongClickListener(this);
+        selectionContainer.setOnClickListener(containerOnClickListener);
+        ephemeralDotAnimationView = ViewUtils.getView(view, R.id.edav__ephemeral_view);
+        ephemeralTypeView = ViewUtils.getView(view, R.id.gtv__row_conversation__audio__ephemeral_type);
+        ephemeralTypeView.setVisibility(GONE);
 
         actionButton.setProgressColor(messageViewsContainer.getControllerFactory().getAccentColorController().getColor());
 
@@ -143,14 +209,20 @@ public class AudioMessageViewController extends MessageViewController implements
 
     @Override
     protected void onSetMessage(Separator separator) {
-        selectionContainer.setOnLongClickListener(this);
+        containerOnClickListener.reset();
         messageModelObserver.setAndUpdate(message);
         actionButton.setMessage(message);
+        messageViewsContainer.getControllerFactory().getAccentColorController().addAccentColorObserver(this);
+        ephemeralDotAnimationView.setMessage(message);
     }
 
     @Override
     public void recycle() {
-        selectionContainer.setOnLongClickListener(null);
+        if (!messageViewsContainer.isTornDown()) {
+            messageViewsContainer.getControllerFactory().getAccentColorController().removeAccentColorObserver(this);
+        }
+        containerOnClickListener.reset();
+        ephemeralDotAnimationView.setMessage(null);
         messageModelObserver.clear();
         playbackControlsModelObserver.clear();
         assetModelObserver.clear();
@@ -160,19 +232,24 @@ public class AudioMessageViewController extends MessageViewController implements
         actionButton.clearProgress();
         audioDurationText.setText(StringUtils.formatTimeSeconds(0));
         audioSeekBar.setEnabled(false);
+        progressDotsView.setExpired(false);
         super.recycle();
     }
 
     @Override
-    public TouchFilterableLayout getView() {
+    public View getView() {
         return view;
     }
 
     @Override
     public void onAccentColorHasChanged(Object sender, int color) {
-        super.onAccentColorHasChanged(sender, color);
         actionButton.setProgressColor(color);
         updateSeekbarColor(color);
+        ephemeralDotAnimationView.setPrimaryColor(color);
+        ephemeralDotAnimationView.setSecondaryColor(ColorUtils.injectAlpha(ResourceUtils.getResourceFloat(context.getResources(), R.dimen.ephemeral__accent__timer_alpha),
+                                                                           color));
+        progressDotsView.setAccentColor(ColorUtils.injectAlpha(ThemeUtils.getEphemeralBackgroundAlpha(context),
+                                                               color));
     }
 
     private void setProgressDotsVisible(boolean isVisible) {
@@ -202,10 +279,10 @@ public class AudioMessageViewController extends MessageViewController implements
         drawable.setColorFilter(new LightingColorFilter(0xFF000000, color));
     }
 
-    @Override
-    public void onClick(View v) {
+    public void onActionClick() {
         if (messageViewsContainer == null ||
-            messageViewsContainer.isTornDown()) {
+            messageViewsContainer.isTornDown() ||
+            asset == null) {
             return;
         }
         switch (asset.getStatus()) {
@@ -215,19 +292,18 @@ public class AudioMessageViewController extends MessageViewController implements
                 }
                 break;
             case UPLOAD_NOT_STARTED:
-            case META_DATA_SENT:
-            case PREVIEW_SENT:
             case UPLOAD_IN_PROGRESS:
                 if (message.getMessageStatus() != Message.Status.SENT) {
                     asset.getUploadProgress().cancel();
                 }
                 break;
             case UPLOAD_DONE:
-                if (messageViewsContainer.getStoreFactory().getNetworkStore().hasInternetConnection()) {
-                    setPlaybackControls(true);
-                } else {
-                    messageViewsContainer.getStoreFactory().getNetworkStore().notifyNetworkAccessFailed();
-                }
+                messageViewsContainer.getStoreFactory().getNetworkStore().doIfHasInternetOrNotifyUser(new DefaultNetworkAction() {
+                    @Override
+                    public void execute(NetworkMode networkMode) {
+                        setPlaybackControls(true);
+                    }
+                });
                 break;
             case DOWNLOAD_DONE:
                 if (playbackControls == null) {
@@ -245,18 +321,6 @@ public class AudioMessageViewController extends MessageViewController implements
             default:
                 break;
         }
-    }
-
-    @Override
-    public boolean onLongClick(View v) {
-        if (message == null ||
-            messageViewsContainer == null ||
-            messageViewsContainer.getControllerFactory() == null ||
-            messageViewsContainer.getControllerFactory().isTornDown()) {
-            return false;
-        }
-        messageViewsContainer.getControllerFactory().getMessageActionModeController().selectMessage(message);
-        return true;
     }
 
     private void setPlaybackControls(final boolean autoPlay) {
@@ -293,8 +357,15 @@ public class AudioMessageViewController extends MessageViewController implements
                 asset.getMimeType(),
                 (int) asset.getDuration().getSeconds(),
                 !message.getUser().isMe(),
-                messageViewsContainer.getConversationType().name()));
+                messageViewsContainer.getStoreFactory().getConversationStore().getCurrentConversation()));
         }
+    }
+
+    private void messageExpired() {
+        assetModelObserver.clear();
+        setProgressDotsVisible(true);
+        progressDotsView.setExpired(true);
+        ephemeralTypeView.setVisibility(VISIBLE);
     }
 
 }

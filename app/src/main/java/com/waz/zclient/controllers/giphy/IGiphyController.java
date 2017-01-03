@@ -18,25 +18,25 @@
 package com.waz.zclient.controllers.giphy;
 
 import android.support.annotation.NonNull;
-import com.waz.annotations.Controller;
 
-@Controller
 public interface IGiphyController {
     void addObserver(GiphyObserver observer);
 
     void removeObserver(GiphyObserver observer);
 
     void tearDown();
-    
+
     void searchRandom();
 
     void search(@NonNull String keyword);
+
+    void searchTrending();
 
     void close();
 
     void cancel();
 
-    boolean handleInput(@NonNull String text, boolean afterPressedEnter);
+    boolean handleInput(@NonNull String text);
 
     boolean isInputAllowedForGiphy(String input);
 }

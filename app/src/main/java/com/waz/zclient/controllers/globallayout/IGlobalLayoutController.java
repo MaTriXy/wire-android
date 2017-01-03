@@ -19,10 +19,8 @@ package com.waz.zclient.controllers.globallayout;
 
 import android.app.Activity;
 import android.view.View;
-import com.waz.annotations.Controller;
 import com.waz.zclient.controllers.navigation.Page;
 
-@Controller(requiresActivity = true, requiresGlobalLayoutView = true)
 public interface IGlobalLayoutController {
     void tearDown();
 
@@ -55,4 +53,8 @@ public interface IGlobalLayoutController {
     void setActivity(Activity activity);
 
     void setGlobalLayout(View view);
+
+    void keepScreenAwake();
+
+    void resetScreenAwakeState();
 }

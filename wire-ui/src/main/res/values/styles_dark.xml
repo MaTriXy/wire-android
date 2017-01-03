@@ -29,6 +29,10 @@
         <item name="android:textColor">@color/text__primary_dark</item>
     </style>
 
+    <style name="message_stream__separator_recalled__dark" parent="message_stream__separator_recalled__base">
+        <item name="android:textColor">@color/text__primary_dark</item>
+    </style>
+
     <style name="message_stream__timestamp__dark" parent="@style/message_stream__timestamp__base">
         <item name="android:textColor">@color/text__primary_dark</item>
     </style>
@@ -77,6 +81,10 @@
         <item name="android:textColor">@color/wire__text_color_primary_dark_selector</item>
         <item name="titleTextColor">@color/wire__text_color_primary_dark_selector</item>
         <item name="navigationIcon">@drawable/action_back_light</item>
+    </style>
+
+    <style name="conversation_toolbar_no_divider__dark" parent="conversation_toolbar__dark">
+        <item name="android:background">@null</item>
     </style>
 
     <style name="conversation_toolbar_action_mode__dark" parent="conversation_toolbar_action_mode__base">
@@ -134,7 +142,7 @@
     </style>
 
     <style name="user__footer_label__dark" parent="user__footer_label__base">
-        <item name="android:textColor">@color/text__secondary_light</item>
+        <item name="android:textColor">@color/text__primary_dark</item>
     </style>
 
     <style name="user__strong_label__dark" parent="user__strong_label__base">
@@ -164,6 +172,10 @@
 
     <style name="wire__background__dark" parent="@style/wire__background__base">
         <item name="android:background">@color/background_dark</item>
+    </style>
+
+    <style name="wire__background_as_text_color__dark" parent="@style/wire__background_as_text_color__base">
+        <item name="android:textColor">@color/background_dark</item>
     </style>
 
     <style name="common__strong_background__dark" parent="@style/common__strong_background__base">
@@ -201,6 +213,10 @@
 
     <style name="start_ui__user_row__label__dark" parent="start_ui__user_row__label__base">
         <item name="android:textColor">@color/text__primary_dark</item>
+    </style>
+
+    <style name="start_ui__user_row__sub_label__dark" parent="start_ui__user_row__label__base">
+        <item name="android:textColor">@color/text__secondary_light</item>
     </style>
 
     <style name="start_ui__header_row__label__dark" parent="start_ui__header_row__label__base">
@@ -276,4 +292,14 @@
     <style name="giphy_error__dark" parent="giphy_error__base">
         <item name="android:textColor">@color/white</item>
     </style>
+
+    <style name="typing_indicator_box_dark" parent="typing_indicator_box_base">
+        <item name="android:background">@drawable/typing_indicator_background_dark</item>
+    </style>
+
+    <style name="typing_indicator_text_dark" parent="typing_indicator_text_base">
+        <item name="android:textColor">@color/white</item>
+    </style>
+
+
 </resources>

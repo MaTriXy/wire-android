@@ -21,19 +21,18 @@ import android.content.Context;
 import android.util.AttributeSet;
 import android.view.LayoutInflater;
 import android.widget.FrameLayout;
-import android.widget.TextView;
 import com.waz.api.UpdateListener;
 import com.waz.api.User;
 import com.waz.zclient.R;
 import com.waz.zclient.utils.ViewUtils;
-import com.waz.zclient.views.chathead.ChatheadView;
+import com.waz.zclient.common.views.ChatheadView;
 
 public class SearchResultUserRowView extends FrameLayout implements UserRowView,
                                                                     UpdateListener {
 
     private User user;
     private ChatheadView chathead;
-    private TextView nameView;
+    private ContactListItemTextView contactListItemTextView;
 
     public SearchResultUserRowView(Context context) {
         this(context, null);
@@ -80,17 +79,17 @@ public class SearchResultUserRowView extends FrameLayout implements UserRowView,
         if (user == null) {
             return;
         }
-        nameView.setText(user.getName());
+        contactListItemTextView.setUser(user);
         chathead.setUser(user);
     }
 
     public void applyDarkTheme() {
-        nameView.setTextColor(getContext().getResources().getColor(R.color.text__primary_dark));
+        contactListItemTextView.applyDarkTheme();
     }
 
     private void init(Context context) {
         LayoutInflater.from(context).inflate(R.layout.list_row_pickuser_searchuser, this, true);
         chathead = ViewUtils.getView(this, R.id.cv_pickuser__searchuser_chathead);
-        nameView = ViewUtils.getView(this, R.id.ttv_pickuser__searchuser_name);
+        contactListItemTextView = ViewUtils.getView(this, R.id.clitv__contactlist__user__text_view);
     }
 }

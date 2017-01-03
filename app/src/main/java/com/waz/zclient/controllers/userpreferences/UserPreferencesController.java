@@ -22,10 +22,17 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import com.waz.zclient.R;
-import com.waz.zclient.pages.main.profile.camera.manager.CameraDirection;
+import com.waz.zclient.camera.CameraFacing;
+import com.waz.zclient.utils.StringUtils;
+import org.json.JSONArray;
+import org.json.JSONException;
 import timber.log.Timber;
 
+import java.util.List;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.UUID;
+import java.util.Collection;
 
 public class UserPreferencesController implements IUserPreferencesController {
 
@@ -37,6 +44,7 @@ public class UserPreferencesController implements IUserPreferencesController {
     public static final String USER_PREFS_GENERIC_INVITATION_TOKEN = "USER_PREFS_GENERIC_INVITATION_TOKEN";
     public static final String USER_PREFS_PERSONAL_INVITATION_TOKEN = "USER_PREFS_PERSONAL_INVITATION_TOKEN";
     public static final String USER_PERFS_AB_TESTING_GROUP = "USER_PERFS_AB_TESTING_GROUP";
+    public static final String USER_PREF_PLAY_SERVICES_ERROR_SHOWN = "USER_PREF_PLAY_SERVICES_ERROR_SHOWN";
     private static final String USER_PREFS_SHOW_SHARE_CONTACTS_DIALOG = "USER_PREFS_SHOW_SHARE_CONTACTS_DIALOG ";
     private static final String USER_PREFS_RECENT_CAMERA_DIRECTION = "USER_PREFS_RECENT_CAMERA_DIRECTION";
     private static final String USER_PREF_SPOTIFY_LOGIN_COUNT = "PREF_SPOTIFY_LOGIN_COUNT";
@@ -47,6 +55,10 @@ public class UserPreferencesController implements IUserPreferencesController {
     private static final String USER_PREF_LOGGED_IN = "USER_PREF_LOGGED_IN_%s";
     private static final String USER_PREF_AB_TESTING_UUID = "USER_PREF_AB_TESTING_UUID";
     private static final String USER_PREF_ACTION_PREFIX = "USER_PREF_ACTION_PREFIX";
+    private static final String USER_PREF_RECENT_EMOJIS = "USER_PREF_RECENT_EMOJIS";
+    private static final String USER_PREF_UNSUPPORTED_EMOJIS = "USER_PREF_UNSUPPORTED_EMOJIS";
+    private static final String USER_PREF_UNSUPPORTED_EMOJIS_CHECKED = "USER_PREF_UNSUPPORTED_EMOJIS_CHECKED";
+    private static final String USER_PREF_LAST_EPHEMERAL_VALUE = "USER_PREF_LAST_EPHEMERAL_VALUE";
 
     private static final String PREFS_DEVICE_ID = "com.waz.device.id";
 
@@ -102,14 +114,14 @@ public class UserPreferencesController implements IUserPreferencesController {
     }
 
     @Override
-    public void setRecentCameraDirection(CameraDirection cameraDirection) {
-        userPreferences.edit().putInt(USER_PREFS_RECENT_CAMERA_DIRECTION, cameraDirection.id).apply();
+    public void setRecentCameraDirection(CameraFacing cameraFacing) {
+        userPreferences.edit().putInt(USER_PREFS_RECENT_CAMERA_DIRECTION, cameraFacing.facing).apply();
     }
 
     @Override
-    public CameraDirection getRecentCameraDirection() {
-        return CameraDirection.getDirection(userPreferences.getInt(USER_PREFS_RECENT_CAMERA_DIRECTION,
-                                                                   CameraDirection.BACK_FACING.id));
+    public CameraFacing getRecentCameraDirection() {
+        return CameraFacing.getFacing(userPreferences.getInt(USER_PREFS_RECENT_CAMERA_DIRECTION,
+                                                             CameraFacing.BACK.facing));
     }
 
     @Override
@@ -194,8 +206,8 @@ public class UserPreferencesController implements IUserPreferencesController {
     }
 
     @Override
-    public boolean isGiphyEnabled() {
-        return userPreferences.getBoolean(context.getString(R.string.pref_options_giphy_key), true);
+    public boolean isCursorSendButtonEnabled() {
+        return userPreferences.getBoolean(context.getString(R.string.pref_options_cursor_send_button_key), true);
     }
 
     @Override
@@ -295,4 +307,79 @@ public class UserPreferencesController implements IUserPreferencesController {
         return group;
     }
 
+    @Override
+    public void addRecentEmoji(String emoji) {
+        RecentEmojis recentEmojis = new RecentEmojis(userPreferences.getString(USER_PREF_RECENT_EMOJIS, null));
+        recentEmojis.addRecentEmoji(emoji);
+        userPreferences.edit().putString(USER_PREF_RECENT_EMOJIS, recentEmojis.getJson()).apply();
+    }
+
+    @Override
+    public List<String> getRecentEmojis() {
+        return new RecentEmojis(userPreferences.getString(USER_PREF_RECENT_EMOJIS, null)).getRecentEmojis();
+    }
+
+    @Override
+    public void setUnsupportedEmoji(Collection<String> emoji, int version) {
+        JSONArray array = new JSONArray();
+        for (String e : emoji) {
+            array.put(e);
+        }
+        userPreferences.edit()
+            .putString(USER_PREF_UNSUPPORTED_EMOJIS, array.toString())
+            .putInt(USER_PREF_UNSUPPORTED_EMOJIS_CHECKED, version)
+            .apply();
+    }
+
+    @Override
+    public Set<String> getUnsupportedEmojis() {
+        String json = userPreferences.getString(USER_PREF_UNSUPPORTED_EMOJIS, null);
+        Set<String> unsupportedEmojis = new HashSet<>();
+        if (!StringUtils.isBlank(json)) {
+            try {
+                JSONArray jsonArray = new JSONArray(json);
+                for (int i = 0; i < jsonArray.length(); i++) {
+                    unsupportedEmojis.add(jsonArray.getString(i));
+                }
+            } catch (JSONException e) {
+                // ignore
+            }
+        }
+        return unsupportedEmojis;
+    }
+
+    @Override
+    public boolean hasCheckedForUnsupportedEmojis(int version) {
+        return userPreferences.getInt(USER_PREF_UNSUPPORTED_EMOJIS_CHECKED, 0) >= version;
+    }
+
+    @Override
+    public boolean hasShareContactsEnabled() {
+        return userPreferences.getBoolean(context.getString(R.string.pref_share_contacts_key), true);
+    }
+
+    @Override
+    public void setShareContactsEnabled(boolean enabled) {
+        userPreferences.edit().putBoolean(context.getString(R.string.pref_share_contacts_key), enabled).apply();
+    }
+
+    @Override
+    public long getLastEphemeralValue() {
+        return userPreferences.getLong(USER_PREF_LAST_EPHEMERAL_VALUE, 0);
+    }
+
+    @Override
+    public void setLastEphemeralValue(long value) {
+        userPreferences.edit().putLong(USER_PREF_LAST_EPHEMERAL_VALUE, value).apply();
+    }
+
+    @Override
+    public boolean hasPlayServicesErrorShown() {
+        return userPreferences.getBoolean(USER_PREF_PLAY_SERVICES_ERROR_SHOWN, false);
+    }
+
+    @Override
+    public void setPlayServicesErrorShown(boolean value) {
+        userPreferences.edit().putBoolean(USER_PREF_PLAY_SERVICES_ERROR_SHOWN, value).apply();
+    }
 }

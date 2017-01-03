@@ -28,12 +28,10 @@ import android.graphics.RectF;
 import android.util.AttributeSet;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
 import android.view.View;
-import com.waz.zclient.utils.SquareOrientation;
-import net.hockeyapp.android.ExceptionHandler;
 import com.waz.zclient.ui.R;
-
-import java.util.LinkedList;
+import net.hockeyapp.android.ExceptionHandler;
 
 public class DrawingCanvasView extends View {
 
@@ -43,8 +41,8 @@ public class DrawingCanvasView extends View {
     private Path path;
     private Paint bitmapPaint;
     private Paint drawingPaint;
+    private Paint emojiPaint;
     private Paint whitePaint;
-    private SquareOrientation backgroundImageRotation = SquareOrientation.NONE;
     private DrawingCanvasCallback drawingCanvasCallback;
 
     //used for drawing path
@@ -60,8 +58,17 @@ public class DrawingCanvasView extends View {
 
     private int trimBuffer;
     private final int defaultStrokeWidth = getResources().getDimensionPixelSize(R.dimen.color_picker_small_dot_radius) * 2;
+    private String emoji;
+    private boolean drawEmoji;
 
-    private LinkedList<HistoryItem> historyItems; // NOPMD
+    private final SketchCanvasHistory canvasHistory;
+
+    public enum Mode {
+        SKETCH,
+        TEXT,
+        EMOJI
+    }
+    private Mode currentMode;
 
     public DrawingCanvasView(Context context) {
         this(context, null);
@@ -73,13 +80,13 @@ public class DrawingCanvasView extends View {
 
     public DrawingCanvasView(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
+        canvasHistory = new SketchCanvasHistory();
         init();
     }
 
     private void init() {
         path = new Path();
         bitmapConfig = Bitmap.Config.ARGB_8888;
-        historyItems = new LinkedList<>();
         bitmapPaint = new Paint(Paint.DITHER_FLAG);
         drawingPaint = new Paint(Paint.DITHER_FLAG | Paint.ANTI_ALIAS_FLAG);
         drawingPaint.setColor(Color.BLACK);
@@ -89,6 +96,10 @@ public class DrawingCanvasView extends View {
         drawingPaint.setStrokeWidth(defaultStrokeWidth);
         whitePaint = new Paint(Paint.DITHER_FLAG);
         whitePaint.setColor(Color.WHITE);
+        emojiPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        emojiPaint.setStrokeWidth(1);
+        emoji = null;
+        currentMode = Mode.SKETCH;
 
         trimBuffer = getResources().getDimensionPixelSize(R.dimen.draw_image_trim_buffer);
     }
@@ -110,16 +121,18 @@ public class DrawingCanvasView extends View {
                 canvas = new Canvas(bitmap);
             }
         }
-        canvas.drawRect(0, 0, bitmap.getWidth(), bitmap.getHeight(), whitePaint);
-        //needed for tablet view switching
-        drawBackgroundBitmap();
+        redraw();
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         canvas.drawColor(Color.TRANSPARENT);
         canvas.drawBitmap(bitmap, 0, 0, bitmapPaint);
-        canvas.drawPath(path, drawingPaint);
+        if (drawEmoji) {
+            canvas.drawText(emoji, currentX, currentY, emojiPaint);
+        } else {
+            canvas.drawPath(path, drawingPaint);
+        }
     }
 
     public void setBackgroundBitmap(Bitmap bitmap) {
@@ -128,27 +141,14 @@ public class DrawingCanvasView extends View {
         }
         backgroundBitmap = bitmap;
         if (backgroundBitmap.getWidth() > backgroundBitmap.getHeight()) {
-            // Flip the image in landscape
             isBackgroundBitmapLandscape = true;
-            switch (backgroundImageRotation) {
-                case LANDSCAPE_RIGHT:
-                    backgroundImageRotation = SquareOrientation.LANDSCAPE_RIGHT;
-                    break;
-                case LANDSCAPE_LEFT:
-                    backgroundImageRotation = SquareOrientation.LANDSCAPE_LEFT;
-                    break;
-                default:
-                    //if we dont have a side, set one
-                    backgroundImageRotation = SquareOrientation.LANDSCAPE_LEFT;
-                    break;
-            }
         }
         drawBackgroundBitmap();
     }
 
     public void reset() {
         paintedOn(false);
-        historyItems.clear();
+        canvasHistory.clear();
         canvas.drawRect(0, 0, bitmap.getWidth(), bitmap.getHeight(), whitePaint);
         drawBackgroundBitmap();
         invalidate();
@@ -156,11 +156,16 @@ public class DrawingCanvasView extends View {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        if (gestureDetector.onTouchEvent(event) && backgroundBitmap == null) {
+        if (currentMode == Mode.TEXT) {
+            return scaleGestureDetector.onTouchEvent(event);
+        }
+        if (longPressGestureDetector.onTouchEvent(event) && backgroundBitmap == null) {
             invalidate();
             return true;
         }
-        if (historyItems.isEmpty() && drawingPaint.getColor() == getResources().getColor(R.color.draw_white)) {
+        if (backgroundBitmap == null &&
+            canvasHistory.size() == 0 &&
+            drawingPaint.getColor() == getResources().getColor(R.color.draw_white)) {
             return true;
         }
         float x = event.getX();
@@ -183,14 +188,46 @@ public class DrawingCanvasView extends View {
         return true;
     }
 
-    private final GestureDetector gestureDetector = new GestureDetector(getContext(), new GestureDetector.SimpleOnGestureListener() {
+    private final ScaleGestureDetector scaleGestureDetector = new ScaleGestureDetector(getContext(), new ScaleListener());
+
+    private class ScaleListener extends ScaleGestureDetector.SimpleOnScaleGestureListener {
+        float scaleFactor = 1f;
+
+        @Override
+        public boolean onScaleBegin(ScaleGestureDetector detector) {
+            if (drawingCanvasCallback != null) {
+                drawingCanvasCallback.onScaleStart();
+            }
+            return true;
+        }
+
+        @Override
+        public void onScaleEnd(ScaleGestureDetector detector) {
+            if (drawingCanvasCallback != null) {
+                drawingCanvasCallback.onScaleEnd();
+            }
+        }
+
+        @Override
+        public boolean onScale(ScaleGestureDetector detector) {
+            scaleFactor *= detector.getScaleFactor();
+            // Don't let the object get too small or too large.
+            scaleFactor = Math.max(0.1f, Math.min(scaleFactor, 5.0f));
+            if (drawingCanvasCallback != null) {
+                drawingCanvasCallback.onScaleChanged(scaleFactor);
+            }
+            return true;
+        }
+    }
+
+    private final GestureDetector longPressGestureDetector = new GestureDetector(getContext(), new GestureDetector.SimpleOnGestureListener() {
         public void onLongPress(MotionEvent e) {
-            if (backgroundBitmap != null) {
+            if (backgroundBitmap != null || currentMode != Mode.SKETCH) {
                 return;
             }
             drawingPaint.setStyle(Paint.Style.FILL);
             canvas.drawRect(0, 0, bitmap.getWidth(), bitmap.getHeight(), drawingPaint);
-            historyItems.add(new FilledScreen(bitmap.getWidth(), bitmap.getHeight(), new Paint(drawingPaint)));
+            canvasHistory.addFillScreen(bitmap.getWidth(), bitmap.getHeight(), new Paint(drawingPaint));
             paintedOn(true);
             drawingPaint.setStyle(Paint.Style.STROKE);
             invalidate();
@@ -198,78 +235,115 @@ public class DrawingCanvasView extends View {
     });
 
     private void touch_start(float x, float y) {
-        path.reset();
-        path.moveTo(x, y);
-        currentX = x;
-        currentY = y;
+        if (currentMode == Mode.SKETCH) {
+            path.reset();
+            path.moveTo(x, y);
+            currentX = x;
+            currentY = y;
+        } else if (currentMode == Mode.EMOJI) {
+            drawEmoji = true;
+            currentX = x - emojiPaint.getTextSize() / 2;
+            currentY = y;
+        }
     }
 
     private void touch_move(float x, float y) {
         float dx = Math.abs(x - currentX);
         float dy = Math.abs(y - currentY);
         if (dx >= TOUCH_TOLERANCE || dy >= TOUCH_TOLERANCE) {
-            path.quadTo(currentX, currentY, (x + currentX) / 2, (y + currentY) / 2);
-            currentX = x;
-            currentY = y;
+            if (drawEmoji) {
+                currentX = x - emojiPaint.getTextSize() / 2;
+                currentY = y;
+            } else {
+                path.quadTo(currentX, currentY, (x + currentX) / 2, (y + currentY) / 2);
+                currentX = x;
+                currentY = y;
+            }
             paintedOn(true);
             touchMoved = true;
         }
     }
 
     private void touch_up() {
-        path.lineTo(currentX, currentY);
-        canvas.drawPath(path, drawingPaint);
-        if (touchMoved) {
-            touchMoved = false;
-            RectF bounds = new RectF();
-            path.computeBounds(bounds, true);
-            historyItems.add(new Stroke(new Path(path), new Paint(drawingPaint), bounds));
+        if (drawEmoji) {
+            drawEmoji = false;
+            canvas.drawText(emoji, currentX, currentY, emojiPaint);
+            canvasHistory.addEmoji(emoji, currentX, currentY, new Paint(emojiPaint));
+            paintedOn(true);
+        } else {
+            path.lineTo(currentX, currentY);
+            canvas.drawPath(path, drawingPaint);
+            if (touchMoved) {
+                touchMoved = false;
+                RectF bounds = new RectF();
+                path.computeBounds(bounds, true);
+                canvasHistory.addStroke(new Path(path), new Paint(drawingPaint), bounds);
+            }
+            path.reset();
         }
-        path.reset();
+    }
+
+    public float getBackgroundBitmapToCanvasWidthRatio() {
+        return (float) canvas.getWidth() / backgroundBitmap.getWidth();
+    }
+
+    public int getBackgroundBitmapTop() {
+        float ratio = getBackgroundBitmapToCanvasWidthRatio();
+        return (int) ((canvas.getHeight() - (ratio * backgroundBitmap.getHeight())) / 2);
+    }
+
+    public int getLandscapeBackgroundBitmapHeight() {
+        return (int) (backgroundBitmap.getHeight() * getBackgroundBitmapToCanvasWidthRatio());
     }
 
     public int getTopTrimValue(boolean isLandscape) {
-        if (includeBackgroundImage) {
+        if (!isLandscape) {
             return 0;
         }
 
-        int topTrimValue = isLandscape ? bitmap.getWidth() : bitmap.getHeight();
+        int topTrimValue = bitmap.getHeight();
 
-        for (HistoryItem historyItem: historyItems) {
-            if (historyItem instanceof FilledScreen) {
+        for (SketchCanvasHistory.HistoryItem historyItem: canvasHistory.getHistoryItems()) {
+            if (historyItem instanceof SketchCanvasHistory.FilledScreen) {
                 topTrimValue = 0;
                 break;
-            } else if (historyItem instanceof Stroke) {
-                RectF bounds = ((Stroke) historyItem).getBounds();
+            } else if (historyItem instanceof SketchCanvasHistory.Stroke) {
+                RectF bounds = ((SketchCanvasHistory.Stroke) historyItem).getBounds();
                 if (isLandscape) {
-                    topTrimValue = Math.min(topTrimValue, (int) bounds.left);
+                    topTrimValue = Math.min(topTrimValue, (int) bounds.top);
                 } else {
                     topTrimValue = Math.min(topTrimValue, (int) bounds.top);
                 }
+            } else if (historyItem instanceof SketchCanvasHistory.Emoji) {
+                SketchCanvasHistory.Emoji emoji = (SketchCanvasHistory.Emoji) historyItem;
+                topTrimValue = (int) Math.min(topTrimValue, emoji.y - emoji.paint.getTextSize());
             }
         }
         return Math.max(topTrimValue - trimBuffer, 0);
     }
 
     public int getBottomTrimValue(boolean isLandscape) {
-        if (includeBackgroundImage) {
-            return isLandscape ? bitmap.getWidth() : bitmap.getHeight();
+        if (!isLandscape) {
+            return bitmap.getHeight();
         }
+
         int bottomTrimValue = 0;
-        for (HistoryItem historyItem: historyItems) {
-            if (historyItem instanceof FilledScreen) {
-                bottomTrimValue = isLandscape ? bitmap.getWidth() : bitmap.getHeight();
+        for (SketchCanvasHistory.HistoryItem historyItem: canvasHistory.getHistoryItems()) {
+            if (historyItem instanceof SketchCanvasHistory.FilledScreen) {
+                bottomTrimValue = bitmap.getHeight();
                 break;
-            } else if (historyItem instanceof Stroke) {
-                RectF bounds = ((Stroke) historyItem).getBounds();
+            } else if (historyItem instanceof SketchCanvasHistory.Stroke) {
+                RectF bounds = ((SketchCanvasHistory.Stroke) historyItem).getBounds();
                 if (isLandscape) {
-                    bottomTrimValue = Math.max(bottomTrimValue, (int) bounds.right);
+                    bottomTrimValue = Math.max(bottomTrimValue, (int) bounds.bottom);
                 } else {
                     bottomTrimValue = Math.max(bottomTrimValue, (int) bounds.bottom);
                 }
+            } else if (historyItem instanceof SketchCanvasHistory.Emoji) {
+                bottomTrimValue = (int) Math.max(bottomTrimValue, ((SketchCanvasHistory.Emoji) historyItem).y);
             }
         }
-        return Math.min(bottomTrimValue + trimBuffer, isLandscape ? bitmap.getWidth() : bitmap.getHeight());
+        return Math.min(bottomTrimValue + trimBuffer, bitmap.getHeight());
     }
 
     public boolean isBackgroundImageLandscape() {
@@ -278,29 +352,50 @@ public class DrawingCanvasView extends View {
 
     public void setDrawingColor(int color) {
         drawingPaint.setColor(color);
+        emojiPaint.setColor(color);
     }
 
     public void setStrokeSize(int strokeSize) {
         drawingPaint.setStrokeWidth(strokeSize);
     }
 
+    public void setEmoji(String emoji, float size) {
+        currentMode = Mode.EMOJI;
+        this.emoji = emoji;
+        emojiPaint.setTextSize(size);
+    }
+
+    public void setCurrentMode(Mode mode) {
+        currentMode = mode;
+    }
+
+    public Mode getCurrentMode() {
+        return currentMode;
+    }
+
     public boolean undo() {
-        if (historyItems.size() == 0) {
+        if (canvasHistory.size() == 0) {
             return false;
         }
-        if (historyItems.size() == 1) {
+        if (canvasHistory.size() == 1) {
             paintedOn(false);
         }
-        canvas.drawRect(0, 0, bitmap.getWidth(), bitmap.getHeight(), whitePaint);
-        historyItems.removeLast();
-        if (includeBackgroundImage) {
-            drawBackgroundBitmap();
+        SketchCanvasHistory.HistoryItem last = canvasHistory.undo();
+        if (last instanceof SketchCanvasHistory.Text) {
+            SketchCanvasHistory.Text newLastText = canvasHistory.getLastText();
+            if (newLastText != null && newLastText.text != null) {
+                drawingCanvasCallback.onTextChanged(newLastText.text, (int) newLastText.x, (int) newLastText.y, newLastText.scale);
+            } else {
+                drawingCanvasCallback.onTextRemoved();
+            }
         }
-        for (HistoryItem item : historyItems) {
-            item.draw(canvas);
-        }
-        invalidate();
+        redraw();
         return true;
+    }
+
+    public void drawTextBitmap(Bitmap textBitmap, float x, float y, String text, float scale) {
+        canvasHistory.addText(textBitmap, x, y, text, scale, bitmapPaint);
+        redraw();
     }
 
     private void paintedOn(boolean isPaintedOn) {
@@ -328,8 +423,6 @@ public class DrawingCanvasView extends View {
             return;
         }
         includeBackgroundImage = true;
-        canvas.drawRect(0, 0, bitmap.getWidth(), bitmap.getHeight(), whitePaint);
-        
 
         RectF src;
         RectF dest;
@@ -339,11 +432,10 @@ public class DrawingCanvasView extends View {
         float ratio;
 
         if (isBackgroundBitmapLandscape) {
-            ratio = (float) canvas.getHeight() / backgroundBitmap.getWidth();
+            horizontalMargin = 0;
+            imageWidth = canvas.getWidth();
             imageHeight = canvas.getHeight();
-            imageWidth = (int) (backgroundBitmap.getHeight() * ratio);
-            horizontalMargin = (canvas.getWidth() / 2) - (imageWidth / 2);
-            src = new RectF(0, 0, backgroundBitmap.getHeight() - 1, backgroundBitmap.getWidth() - 1);
+            src = new RectF(0, 0, backgroundBitmap.getWidth(), backgroundBitmap.getHeight());
             dest = new RectF(0, 0, imageWidth, imageHeight);
         } else {
             ratio = (float) canvas.getHeight() / backgroundBitmap.getHeight();
@@ -357,44 +449,18 @@ public class DrawingCanvasView extends View {
         Matrix matrix = new Matrix();
         matrix.setRectToRect(src, dest, Matrix.ScaleToFit.CENTER);
 
-        if (isBackgroundBitmapLandscape) {
-            matrix.postTranslate(-imageHeight / 2, -imageWidth / 2); // Centers image
-            matrix.postRotate(-backgroundImageRotation.displayOrientation);
-            matrix.postTranslate(imageWidth / 2, imageHeight / 2);
-        }
         matrix.postTranslate(horizontalMargin, 0);
 
         canvas.drawBitmap(backgroundBitmap, matrix, null);
-        for (HistoryItem item : historyItems) {
-            item.draw(canvas);
-        }
-        drawingCanvasCallback.setRotation(backgroundImageRotation.displayOrientation);
-        invalidate();
     }
 
     public void removeBackgroundBitmap() {
         includeBackgroundImage = false;
-        canvas.drawRect(0, 0, bitmap.getWidth(), bitmap.getHeight(), whitePaint);
-        for (HistoryItem item : historyItems) {
-            item.draw(canvas);
-        }
-        invalidate();
-    }
-
-    public void setConfigOrientation(SquareOrientation configOrientation) {
-        if (configOrientation.equals(backgroundImageRotation) || !isBackgroundBitmapLandscape || backgroundBitmap == null) {
-            return;
-        }
-        if (configOrientation == SquareOrientation.LANDSCAPE_LEFT || configOrientation == SquareOrientation.LANDSCAPE_RIGHT) {
-            this.backgroundImageRotation = configOrientation;
-            if (includeBackgroundImage) {
-                drawBackgroundBitmap();
-            }
-        }
+        redraw();
     }
 
     public boolean isEmpty() {
-        return historyItems.size() == 0;
+        return canvasHistory.size() == 0;
     }
 
     public void clearBitmapSpace(int width, int height) {
@@ -405,66 +471,36 @@ public class DrawingCanvasView extends View {
         }
     }
 
-    private class Stroke implements HistoryItem {
-        private final Path path;
-        private final Paint paint;
-        private RectF bounds;
-
-        Stroke(Path path, Paint paint, RectF bounds) {
-            this.path = path;
-            this.paint = paint;
-            this.bounds = bounds;
-        }
-
-        public RectF getBounds() {
-            return bounds;
-        }
-
-        @Override
-        public void draw(Canvas canvas) {
-            canvas.drawPath(path, paint);
-        }
+    public void hideText() {
+        canvasHistory.hideText();
+        redraw();
     }
 
-    private class FilledScreen implements HistoryItem {
-        private final float width;
-        private final float height;
-        private final Paint paint;
+    public void showText() {
+        canvasHistory.showText();
+        redraw();
+    }
 
-        FilledScreen(float width, float height, Paint paint) {
-            this.width = width;
-            this.height = height;
-            this.paint = paint;
+    private void redraw() {
+        canvas.drawRect(0, 0, bitmap.getWidth(), bitmap.getHeight(), whitePaint);
+        paintedOn(canvasHistory.size() > 0);
+        if (includeBackgroundImage) {
+            drawBackgroundBitmap();
         }
+        drawHistory();
+        invalidate();
+    }
 
-        @Override
-        public void draw(Canvas canvas) {
-            canvas.drawRect(0, 0, width, height, paint);
-        }
+    private void drawHistory() {
+        canvasHistory.draw(canvas);
     }
 
     public void onDestroy() {
         bitmap = null;
         backgroundBitmap = null;
         canvas = null;
-        if (historyItems != null) {
-            historyItems.clear();
-            historyItems = null;
+        if (canvasHistory != null) {
+            canvasHistory.clear();
         }
     }
-
-    private interface HistoryItem {
-        void draw(Canvas canvas);
-    }
-
-    public interface DrawingCanvasCallback {
-        void drawingAdded();
-
-        void drawingCleared();
-
-        void setRotation(int rotation);
-
-        void reserveBitmapMemory(int width, int height);
-    }
-
 }

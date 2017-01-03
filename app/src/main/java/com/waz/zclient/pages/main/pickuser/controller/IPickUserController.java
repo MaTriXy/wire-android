@@ -19,12 +19,10 @@ package com.waz.zclient.pages.main.pickuser.controller;
 
 import android.support.annotation.IntDef;
 import android.view.View;
-import com.waz.annotations.Controller;
 import com.waz.api.User;
 
 import java.util.List;
 
-@Controller
 public interface IPickUserController {
 
     enum Destination {
@@ -67,12 +65,6 @@ public interface IPickUserController {
     void hideUserProfile();
 
     boolean isShowingUserProfile();
-
-    void showCommonUserProfile(User user);
-
-    void hideCommonUserProfile();
-
-    boolean isShowingCommonUserProfile();
 
     void addPickUserSearchControllerObserver(PickUserControllerSearchObserver observer);
 

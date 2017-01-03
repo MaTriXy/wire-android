@@ -30,10 +30,32 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
+        android:gravity="center_horizontal"
         android:orientation="vertical"
         >
 
-        <include layout="@layout/rl__participants__header" />
+        <com.waz.zclient.ui.text.TypefaceTextView
+            android:id="@+id/ttv__connect_request__display_name"
+            android:background="@color/participants__header__background_color"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/wire__padding__big"
+            android:freezesText="true"
+            android:gravity="center"
+            android:imeOptions="actionDone"
+            android:inputType="textFilter|textMultiLine|textNoSuggestions"
+            android:textColorHint="@color/text__secondary_light"
+            android:maxLines="3"
+            app:font="@string/wire__typeface__medium"
+            style="?userHeader"
+            />
+
+        <com.waz.zclient.ui.views.UserDetailsView
+            android:id="@+id/udv__connect_request__user_details"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/wire__padding__small"
+            />
 
         <com.waz.zclient.views.images.ImageAssetImageView
             android:id="@+id/iaiv__pending_connect"
@@ -44,18 +66,6 @@
             android:layout_gravity="bottom|center_horizontal"
             />
 
-        <com.waz.zclient.pages.main.connect.views.CommonUsersView
-            android:id="@+id/ll__send_connect_request__common_users"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_gravity="bottom"
-            android:layout_marginTop="@dimen/wire__padding__regular"
-            android:layout_marginBottom="@dimen/wire__padding__small"
-            android:paddingLeft="@dimen/wire__padding__big"
-            android:paddingRight="@dimen/wire__text_size__big"
-            />
-
-
         <LinearLayout
             android:id="@+id/ll__connect_request__accept_menu"
             android:layout_width="match_parent"
@@ -63,8 +73,8 @@
             android:layout_marginBottom="@dimen/connect_request__footer_menu__padding_bottom"
             android:layout_gravity="bottom"
             android:gravity="bottom"
-            android:paddingRight="@dimen/wire__padding__big"
-            android:paddingLeft="@dimen/wire__padding__big"
+            android:paddingStart="@dimen/wire__padding__big"
+            android:paddingEnd="@dimen/wire__padding__big"
             android:orientation="horizontal"
             >
 
@@ -73,7 +83,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="@dimen/framework_confirmation_menu_button_height"
                 android:layout_weight="1"
-                android:layout_marginRight="@dimen/connect_request__common_users__chathead__vertical_padding"
+                android:layout_marginEnd="@dimen/connect_request__common_users__chathead__vertical_padding"
                 android:gravity="center"
                 android:text="@string/connect_request__ignore_button__text"
                 app:font="@string/wire__typeface__light"
@@ -87,7 +97,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="@dimen/framework_confirmation_menu_button_height"
                 android:layout_weight="1"
-                android:layout_marginLeft="@dimen/connect_request__common_users__chathead__vertical_padding"
+                android:layout_marginStart="@dimen/connect_request__common_users__chathead__vertical_padding"
                 android:gravity="center"
                 android:text="@string/send_connect_request__connect_button__text"
                 app:font="@string/wire__typeface__light"
@@ -105,8 +115,8 @@
         android:layout_width="match_parent"
         android:layout_height="@dimen/people_picker__border_line__height"
         android:layout_gravity="top"
-        android:layout_marginRight="@dimen/connect_request__separator__padding_horizontal"
-        android:layout_marginLeft="@dimen/connect_request__separator__padding_horizontal"
+        android:layout_marginStart="@dimen/connect_request__separator__padding_horizontal"
+        android:layout_marginEnd="@dimen/connect_request__separator__padding_horizontal"
         android:background="@color/text__secondary_light__40"
         />
 
